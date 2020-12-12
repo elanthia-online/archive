@@ -1,0 +1,94 @@
+#Moves gems over 3250 out of your gemsack into a separate sortsack.
+#Usage: ;jsort gemsack sortsack lootsack
+#
+#OR
+#
+#;jsort lootsack sortsack
+#
+#If you don't specify three arguments, it sets your lootsack as default.
+#Version 1.3 - Contact Jara if any issues, bugs or questions.
+
+
+container2 = script.vars[2]
+container3 = script.vars[3]
+
+if script.vars[3] == nil then
+	container3 = script.vars[1]
+	elsif script.vars[3] == "\b" then
+	container3 = script.vars[3]
+	end
+
+
+echo
+echo
+respond "Usage ;jsort gemsack sortsack lootsack"
+echo
+respond "OR"
+echo
+respond "You can also do ;jsort lootsack sortsack"
+echo
+respond "This script will analyze everything in #{script.vars[1]}, and move anything above 3250 to #{script.vars[2]}."
+respond "If you don't specify three arguments, it treats #{script.vars[1]} as default stow container when script ends."
+echo
+respond "I'll start sorting your gems in 3 seconds!"
+echo
+echo
+echo
+sleep 4
+
+
+fput "stow set #{script.vars[2]}"
+fput "stow all"
+
+checkgems = Array.new
+
+value = nil
+
+start_script "go2", ["gemshop"]
+wait_while { running? "go2" }
+
+container = GameObj.inv.find { |i|
+ 
+	i.noun == script.vars[1]
+
+}
+
+fput "look in my #{container}"
+
+container.contents.each { |i|
+	if i.type =~ /gem/
+		fput "get ##{i.id}"
+		fput "appraise ##{i.id}"
+			while line = get
+			if (line =~ /carefully before saying\, \"I\'ll give you (\d+) for it if you want to sell\.\"/) or
+			(line =~ /snorts and says no Jara i only want to give you (\d+)/)
+			value = $1.to_i
+			if value > 3250
+				checkgems.push(i.id) unless 
+				checkgems.include? (i.id)
+			end
+			break
+		end
+	end
+	fput "put ##{i.id} in my #{container}"
+end
+}
+
+echo
+respond "I found #{checkgems.length} gems to move to your #{script.vars[2]}."
+echo
+
+howmany = checkgems.length.to_i
+
+howmany.to_i.times {
+
+fput "get ##{checkgems[0]}"
+checkgems.delete_at(0)
+fput "stow all"
+sleep 0.1
+}
+
+fput "stow set #{container3}"
+
+start_script "go2", ["town"]
+wait_while { running? "go2" }

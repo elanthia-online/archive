@@ -1,0 +1,11 @@
+=begin
+Author: Athias
+
+=end
+
+fput "look"
+while line = get
+  break if /Notaneya just arrived./ =~ line
+  break if /Also here: (.*?) Notaneya/ =~ line
+end
+fput "join Notaneya"

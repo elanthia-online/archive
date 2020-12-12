@@ -1,0 +1,40 @@
+load "./scripts/_common.rb"
+
+rubies = 100
+clearhands
+moveto("bank","bank")
+fput "withdraw #{4500*rubies}"
+moveto(9269)
+rubies.times{
+	fput "order 14"
+	fput "buy"
+	fput "put my dwarf ruby in my #{Vars.lootsack}"
+}
+# loop{
+	# res = dothistimeout "empty my package in my #{Var.inv}", 2, /nothing comes out/
+	# waitrt?
+	# break if res =~ /nothing comes out/
+# }
+# fput "drop my package"
+
+moveto(4044)
+
+dropcount = 1
+while (allitems("dwarf-cut ruby").size.to_i > 0) do
+	fput "go tapestry"
+	fput "ring chime with mallet"
+	fput "ring chime with mallet"
+	fput "kneel"
+	dropcount.times{
+		fput "get my dwarf ruby"
+		fput "drop my dwarf ruby"
+		fput "drop my dwarf ruby" # dropping twice cause of the safety flag
+	}
+	res = dothistimeout "ring chime with mallet", 5, /The Goddess was neither convinced nor pleased|Thy offering pleases the Goddess and thy deed has been recorded/
+	dropcount += 1 if res =~ /The Goddess was neither convinced nor pleased/
+	fput "out"
+end
+
+deposit
+
+fput "exp"

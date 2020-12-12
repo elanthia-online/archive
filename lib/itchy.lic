@@ -1,0 +1,16 @@
+# Uses beseech to remove itchy curse
+# author: Glaves
+# version: 1.0
+# tags: itchy, curse, itchycurse, paladin, beseech
+#
+
+
+
+loop {
+
+waitfor "A feeling of defenselessness washes over you!"
+waitrt?
+waitcastrt?
+fput "beseech"
+
+}

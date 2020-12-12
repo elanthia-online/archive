@@ -1,0 +1,160 @@
+=begin
+  VolnXPBar!!!
+  Stormfront Only
+  Lord Khazaann Colquhoun of House Daingneach Onoir
+=end
+
+if $SAFE > 0
+  echo "error: This script needs to be trusted to work. (;trust #{script.name.downcase})"
+  exit
+end
+
+if $frontend != "stormfront"
+  respond ""
+  respond " Thank you for your interest in VolnXPBar"
+  respond " This version is specific to the Stormfront frontend"
+  respond ""
+  respond " Closing now"
+  respond ""
+  exit
+end
+
+favor_to_step = proc {
+	(Society.rank*100) + (((XMLData.level**2)*(((Society.rank+2)/3)*5))/3)
+}
+
+wait_while { XMLData.next_level_text !~ /(experience|until next level)/ or !XMLData.next_level_value.integer? }
+
+
+no_kill_all
+no_pause_all
+hide_me
+debug = false
+xpnFirstTime = 0
+nowTime = Time.now - 1
+xpnNLT = xpnCur = xpnOld = xpnCap = xpnValue = fvrText = fvrStep = xpnstrt = xpnText = xpnHour = xpnLast = xpnTotal = 0
+oldRM = oldXP = oldMD = oldSN = oldEN = nil
+capped = false
+firstpulse = true
+capped = true if Char.level == 100
+buffx = 5
+buffy = 5
+sizebx = "99%"
+sizerx = 120
+sizex = 10
+sizey = 20
+xpnText = sprintf("Lvl: %2s  (%2s%%)   %6s TNL", Char.level,xpnValue, xpnCur)
+
+oldfvr = ($favor[:step])
+fvrGain = oldfvr
+fvrStep = favor_to_step.call
+if fvrStep > 0
+   fvrText = sprintf("Voln Favor:   %6s  /%6s    (%2s Pct)", fvrGain, fvrStep,(fvrGain*100/fvrStep) )
+else    
+   fvrText = sprintf("Master Favor:   %6s", $favor[:symbol])
+end
+if fvrStep > 0
+   if fvrGain*100/fvrStep > 100
+   fvrText = sprintf("Master Favor:   %6s", $favor[:symbol])
+end
+end
+
+before_dying {
+  puts("<closeDialog id='VolnXPBar'/>")
+}
+  
+ublinenext  = "\"<progressBar id='ubnext' 	value='\#{xpnValue}'			text='\#{xpnText}'					                top='#{buffy}' left='#{buffx}' width='#{sizebx}' height='#{sizey}'/>\""
+ublinemind  = "\"<skin id='ubmind' name='manaBar' controls='mana'		anchor_top='ubnext'			top='#{buffy}' left='#{buffx}' width='0' height='#{sizey}'/><progressBar id='ubmind'	value='\#{XMLData.mind_value}'		text='\#{XMLData.mind_text}' customText='t'	anchor_top='ubnext'	top='#{buffy}' left='#{buffx}' width='#{sizebx}' height='#{sizex}'/>\""
+if fvrGain > 0
+   if fvrStep > 0
+   ublineenvf  = "\"<progressBar id='ubenvf' 	value='\#{(fvrGain*100)/favor_to_step.call}%'	text='\#{fvrText}'  	anchor_top='ubmind'	top='#{buffy}' left='#{buffx}' width='#{sizebx}' height='#{sizey}'/>\""
+   else
+   ublineenvf  = "\"<progressBar id='ubenvf' 	value='\#{(fvrGain*100)}%'	text='\#{fvrText}'  	anchor_top='ubmind'	top='#{buffy}' left='#{buffx}' width='#{sizebx}' height='#{sizey}'/>\""
+   end
+else
+   ublineenvf  = "\"<progressBar id='ubenvf' 	value=' '	text=' '  	anchor_top='ubmind'	top='#{buffy}' left='#{buffx}' width='0' height='0'/>\""
+end
+
+openLines = [
+  "<closeDialog id='VolnXPBar'/>",
+  "<openDialog type='dynamic' id='VolnXPBar' title='VolnXPBar' target='VolnXPBar' location='main' height='50'  resident='true'>",
+  "<dialogData id='VolnXPBar'>"
+  ]
+tosend = openLines.join
+
+if fvrGain > 0
+   openLines = [ eval(ublinenext),  eval(ublinemind),  eval(ublineenvf)]
+else
+   openLines = [ eval(ublinenext),  eval(ublinemind)]
+end
+
+tosend += openLines.join
+tosend += "</dialogData></openDialog>"
+
+puts(tosend)
+
+loop {
+  wait_while { oldXP == XMLData.next_level_text and oldfvr == fvrGain and (oldRM == Room.current.id or Time.now - nowTime < 1) }
+	  nowTime = Time.now
+	  doLines = "<dialogData id='VolnXPBar'>"
+
+  	  fvrGain = ($favor[:step])
+  	  fvrStep = favor_to_step.call
+  
+     if oldfvr != fvrGain then 
+        fvrGain = ($favor[:step])
+        oldfvr = fvrGain
+        if fvrStep  >= 0 
+           if fvrGain > 0
+              fvrText = sprintf("Voln Favor: %2s/%2s (%2s%%)", fvrGain, fvrStep,(fvrGain*100/fvrStep) )
+           end           
+        else    
+           fvrText = sprintf("Master Favor: %2s", fvrGain)
+        end
+        if fvrGain*100/fvrStep > 100
+           fvrText = sprintf("Master Favor: %2s", $favor[:symbol])
+        end
+        doLines += eval(ublineenvf) 
+     end
+	  
+ 	  if oldMD  != XMLData.mind_text then 
+	     oldMD = XMLData.mind_text	 
+  	     doLines += eval(ublinemind) 
+  	  end
+  	  
+	  if oldXP  != XMLData.next_level_text	then 
+	    xpnNLT = XMLData.next_level_text
+	    if xpnNLT =~ /( experience| until next level)/
+	      xpnCur = xpnNLT.delete(' experience').delete(' until next level').to_i
+	      xpnLast = xpnOld - xpnCur
+	      xpnLast *= -1 if xpnLast < 0
+	      xpnLast = 0 if xpnLast > 2499
+	    else
+	      xpnCur = 0
+	      xpnLast = 0
+	    end
+	    if firstpulse
+	      xpnFirstTime = Time.now - 1
+	      xpnTotal = 0
+	      xpnLast = 0
+	      firstpulse = false
+	    end
+	    if capped
+	      xpnCap = (xpnCur / 2500 + 1) * 2500 - xpnCur
+	      xpnValue = 100 - (xpnCap / 25)
+	      xpnText = "#{xpnCap} until TP"
+	    else
+	      xpnValue = XMLData.next_level_value.to_i
+          xpnText = sprintf("Lvl: %2s  (%2s%%)   %6s TNL", Char.level,xpnValue, xpnCur)
+        end
+	    xpnTotal += xpnLast
+	    xpnHour = ((1.00 * xpnTotal) / ((nowTime - xpnFirstTime)/3600.00)).to_i
+	    xpnOld = xpnCur
+	    oldRM = Room.current.id
+	    oldXP = XMLData.next_level_text
+	    doLines += eval(ublinenext)
+     end
+     doLines += "</dialogData>"
+     puts(doLines) if doLines != "<dialogData id='VolnXPBar'></dialogData>"
+  }
+

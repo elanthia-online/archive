@@ -1,0 +1,21 @@
+=begin
+
+Author: Glaves
+Version: 1.0
+Tags: Poison, Disease, Unpoison, Undisease, 113, 114
+
+Automated Unpoison / Undisease
+
+=end
+loop { 
+	if checkdisease && Spell[113].affordable?
+			Spell[113].cast
+			waitrt?
+			waitcastrt?
+	elsif checkpoison && Spell[114].affordable?
+			Spell[114].cast
+			waitrt?
+			waitcastrt?
+	end
+	sleep 1
+	}

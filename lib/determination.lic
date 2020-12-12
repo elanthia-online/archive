@@ -1,0 +1,24 @@
+=begin
+
+Author: Glaves
+Version: 1.0
+Tags: Determination, sigils, GoS, Sunfist, Combat
+
+
+Uses determination when you cant search, cast or preform some other action based on a line check
+
+=end
+
+
+loop{
+
+    if [Wounds.head, Scars.head, Wounds.leftEye, Scars.leftEye, Wounds.rightEye, Scars.rightEye, Wounds.nsys, Scars.nsys].max > 1 ||  [Wounds.leftArm, Wounds.leftHand, Wounds.rightArm, Wounds.rightHand, Scars.leftArm, Scars.leftHand, Scars.rightArm, Scars.rightHand].max > 2 || [Wounds.leftArm, Wounds.leftHand, Scars.leftArm, Scars.leftHand].max > 0 && [Wounds.rightArm, Wounds.rightHand, Scars.leftArm, Scars.leftHand].max > 0 
+      if Spell[9716].affordable? && !Spell[9716].active?
+        Spell[9716].cast
+        waitrt?
+		waitcastrt?
+			end
+	end
+	
+	sleep 1
+}

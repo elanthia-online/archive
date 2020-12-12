@@ -1,0 +1,18 @@
+#Will attempt to pull anyone up from the ground
+#I wouldn't use this in town as some people like to actually sit
+#-Glaves (Thanks to Dreaven for helping me fix an issue)
+
+
+
+def get_up
+	GameObj.pcs.each { |down| 
+		if down.status =~ /sitting|kneeling|prone/ && down.status !~ /webbed|calmed|stunned/i
+			fput "pull ##{down.id}"
+		end
+	}
+end
+
+loop {
+	pause 1
+	get_up
+}

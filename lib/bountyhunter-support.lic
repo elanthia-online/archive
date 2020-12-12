@@ -1,0 +1,122 @@
+
+if $frontend == 'stormfront'
+	fam_window_begin = "<pushStream id=\"death\" ifClosedStyle=\"watching\"/>"
+	fam_window_end   = "<popStream/>\r\n"
+end
+
+teleport = proc {
+
+	if Char.name =~ /Alastir/
+		pause_script("go2") if Script.running?("go2")
+			fput "twist my ring to 2"
+			fput "rub my ring"
+			waitfor "Old Ta'Faendryl, Treetop"
+		kill_script("go2")
+#		unpause_script("go2") if Script.running?("go2")
+	elsif Char.name =~ /Erykk/
+		pause_script("go2") if Script.running?("go2")
+			fput "twist my amulet to 2"
+			fput "rub my amulet"
+			waitfor "Old Ta'Faendryl, Treetop"
+		kill_script("go2")
+#		unpause_script("go2") if Script.running?("go2")
+	end
+}
+
+goto "TOP"
+
+TOP:
+#-----------------
+#HUNTING-RELATED
+#-----------------
+	
+#	match "CHILD", "This must be the child you've been sent to rescue."
+#	match "CHILD_RETURNED", "Ah, so you have returned and you've brought the child with you."
+	match "ANNOUNCE", "Out of the corner of your eye, you see (.*) approaching.  (?:She|He|It) must be the creature that you've been tasked to kill!"
+	match "ANNOUNCE", "Out of the corner of your eye, you see (.*) approaching.  It must be the creature that you've been tasked to kill!"
+	match "DEAD", "You are a ghost!"
+	match "DISPEL", "The spirits distract your every action."
+	match "DISPEL", "You suddenly feel angered beyond all reason, causing you to scream out in rage!"
+	match "DISPEL", "A dizzying array of golden runes surround and suffuse you before being absorbed into your body."
+	match "EMPTY_HANDS", "You cannot attack with"
+	match "GET_WEAPON", "#{Vars.weapon} is knocked to the ground!"
+	match "TELEPORT", "You feel a searing sensation, as if your skin were on fire!  Just as the sensation seems unbearable, you stumble out of the crackling barrier!"
+	match "WALK", "Be at peace my child, there is no need to fight here."
+	match "WALK", "Be at peace my child, there is no need for spells of war in here."
+	match "WALK", "The searing pain in your throat makes that impossible."
+	match "WALK", "The pall of silence settles more heavily over you."
+	
+matchwait
+
+#-----------------
+#HUNTING-RELATED
+#-----------------
+
+ANNOUNCE:
+puts("#{fam_window_begin} ** Bounty creature spawned at #{Room.current.id} **\r\n #{fam_window_end}")
+bounty_room = Room.current.id
+if Room.current.id != "#{bounty_room}"
+	start_script ("go2"), ['bounty_room']
+end
+goto "TOP"
+
+CHILD:
+	kill_script("bountyhunter") if Script.running?("bountyhunter")
+	kill_script("explorer") if Script.running?("explorer")
+	kill_script("go2") if Script.running?("go2")
+	start_script "sloot"
+	sleep 1
+	start_script "child2"
+goto "TOP"
+
+CHILD_RETURNED:
+	kill_script("child2") if Script.running?("child2")
+	start_script "bountyhunter"
+goto "TOP"
+
+DEAD:
+	kill_script("bountyhunter") if Script.running?("bountyhunter")
+	kill_script("explorer") if Script.running?("explorer")
+	kill_script("go2") if Script.running?("go2")
+goto "TOP"
+
+DISPEL:
+	pause_script ("explorer")
+	waitrt?
+	waitcastrt?
+	if Char.name =~ /Alastir|Gromsph/
+		if checkmana(17)
+			fput "prepare 417"
+			fput "channel"
+		end
+	elsif Char.name =~ /Erykk/
+		if checkmana(19)
+			fput "prepare 119"
+			fput "channel"
+		end
+	end
+	unpause_script ("explorer")
+goto "TOP"
+
+EMPTY_HANDS:
+	pause_script("explorer") if Script.running?("explorer")
+	empty_hands
+	fput "gird"
+	unpause_script("explorer") if Script.running?("explorer")
+goto "TOP"
+
+GET_WEAPON:
+	pause_script ("explorer")
+	waitrt?
+	fput "get #{Vars.weapon}"
+	waitfor "You pick up"
+	unpause_script ("explorer")
+goto "TOP"
+
+TELEPORT:
+	teleport.call
+goto "TOP"
+	
+WALK:
+	walk
+goto "TOP"

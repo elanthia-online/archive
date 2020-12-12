@@ -1,0 +1,909 @@
+=begin
+This script is by no means complete but I'm storing it here in case I ever
+come back. I previously had a rogue script near complete that I lost
+entirely due to hard drive failure.
+
+Much <3 to Gibreficul for the measuring information and the disarm lines.
+
+SpiffyRogue by SpiffyJr (SpiffyJr@gmail.com)
+ Description: The rogue script to rule them all!
+Dependencies: slib
+=end
+
+#### Begin slib.lic required lines ####
+version = 2.3			# The current version of this script
+slib_version = 2.21		# The required slib version
+
+options = {
+	:author => 'SpiffyJr',
+	:email => 'SpiffyJr@gmail.com',
+	:name => 'SRogue',
+	:version => version
+}
+
+if defined?(SLib.version) or Script.exists?("slib")
+	load($script_dir + '/slib.lic') if !defined?(Slib.version) or slib_version > Slib.version
+	
+	if slib_version > SLib.version
+		smsg "#{script.name}: SLib is being upgraded to the latest version", true
+		SLib.upgrade
+		smsg "#{script.name}: Upgrade complete!"
+	end
+else
+	respond "#{script.name}: This script requires SLib #{slib_version.to_s}."
+	respond "#{script.name}: 1) ;repo download slib 2) ;slib 3) ;sloot setup"
+	exit
+end
+
+@me = SScript.new(options)
+#### End slib.lic required lines ####
+
+@go = SGoto.new
+@reps_left = false
+@task = nil
+@skill = nil
+@pick_current = 1
+@pick_solo = true
+@pick_target = nil
+@pick_scales = false
+
+@commands = {
+	"pick" => "do_pick",
+	"task" => "do_task"
+}
+
+@proper_name = {
+	"cheapshot" => "Cheap Shot",
+	"gambit" => "Gambits",
+	"lmastery" => "Lock Mastery",
+	"stunman" => "Stun Maneuvers",
+	"subdue" => "Subdue"
+}
+
+@skills = {
+	"cheapshot" => {
+		"task_smsg" => {
+			"teach" => /practice footstomping a partner/,
+			"footpad" => /from a master footpad/,
+			"sweep" => /sweep the guild/,
+			"windows" => /clean the guild windows/
+		},
+		"tasks" => [
+			"learn",
+			"teach"
+		]
+	},
+	"lmastery" => {
+		"tasks" => [
+			"footpad",
+			"sense",
+			"windows"
+		],
+	},
+	"stunman" => {
+		"task_smsg" => {
+			"arrows" => /let a footpad shoot arrows/,
+			"footpad" => /visit the footpads for some lessons/,
+			"slaphands" => /slap hands/,
+			"shield" => /practice readying your shield/,
+			"sweep" => /sweep the guild/,
+			"windows" => /clean the windows/
+		},
+		"tasks" => [
+			"footpad",
+			"windows"
+		]
+	}
+}
+
+def show_help
+	smsg sprintf('    %-25s          %s', 'task', 'show available tasks')
+	smsg sprintf('    %-25s          %s', 'setup', 'shows the setup GUI')
+	smsg sprintf('    %-25s          %s', 'pick [number]', 'begin self picking using lockpick #')
+	smsg sprintf('    %-25s          %s', 'pick <target> [number]', 'begin client picking using specified target and lockpick #')
+end
+
+def show_setup
+	done = false
+	save = false
+	
+	settings = @me.settings
+	
+	# Create a SGtk window
+	gtk = SGtk.new("#{@me.name} v#{@me.version} configuration for #{Char.name}", settings)
+	gtk.window.resizable = false
+	
+	Gtk.queue {
+		# Primary window		
+		vb = Gtk::VBox.new(false)
+		vb.set_border_width(5)
+		gtk.window.add(vb)
+	
+		# Notebook
+		nb = Gtk::Notebook.new
+		nb.set_show_border(true)
+		vb.pack_start(nb)
+		
+		# Buttons
+		tbl_btns = Gtk::Table.new(1, 6, true)
+		gtk.add_button(tbl_btns, 0, 5, 'Save', 'save')
+		gtk.add_button(tbl_btns, 0, 6, 'Close', 'close')
+		
+		vb.pack_start(tbl_btns)
+				
+		# Picking
+		tbl = Gtk::Table.new(7, 4, true)
+		tbl.set_border_width(5)
+		tbl.row_spacings = 2
+		tbl.column_spacings = 2
+		
+		gtk.add_checkbutton(tbl, 0, 0, 'Pick scales', 'pick_scales', settings['pick_scales'], :local)
+		gtk.add_checkbutton(tbl, 0, 1, 'Pick scarabs', 'pick_scarabs', settings['pick_scarabs'], :local)
+		gtk.add_checkbutton(tbl, 0, 2, 'Keep scarabs', 'keep_scarabs', settings['keep_scarabs'], :local)
+		gtk.add_entry(tbl, 1, 0, 'Pick #1:', 'pick1', settings['pick1'], :local)
+		gtk.add_entry(tbl, 1, 2, 'Pick #2:', 'pick2', settings['pick2'], :local)
+		gtk.add_entry(tbl, 2, 0, 'Pick #3:', 'pick3', settings['pick3'], :local)
+		gtk.add_entry(tbl, 2, 2, 'Pick #4:', 'pick4', settings['pick4'], :local)
+		gtk.add_entry(tbl, 3, 0, 'Pick #5:', 'pick5', settings['pick5'], :local)
+		gtk.add_entry(tbl, 3, 2, 'Pick Case:', 'pick_case', settings['pick_case'], :local)
+		gtk.add_entry(tbl, 4, 0, 'Roll required to switch picks:', 'pick_roll', settings['pick_roll'], :local)
+		gtk.add_entry(tbl, 4, 2, 'Pick Command:', 'pick_command', settings['pick_command'], :local)
+		gtk.add_entry(tbl, 5, 0, 'Component Sack (acids, etc):', 'component_sack', settings['component_sack'], :local)
+		gtk.add_entry(tbl, 5, 2, '# of scarab disarms:', 'scarab_disarm_count', settings['scarab_disarm_count'], :local)
+		gtk.add_entry(tbl, 6, 0, 'Scales weapon:', 'scales_weapon', settings['scales_weapon'], :local)
+		gtk.add_entry(tbl, 6, 2, 'Scales weapon sack:', 'scales_weapon_sack', settings['scales_weapon_sack'], :local)
+		
+		nb.append_page(tbl, Gtk::Label.new('Picking'))
+		
+		# Stunman
+		tbl = Gtk::Table.new(7, 4, true)
+		tbl.set_border_width(5)
+		tbl.row_spacings = 2
+		tbl.column_spacings = 2
+		
+		gtk.add_entry(tbl, 0, 0, 'Shield name:', 'stunman_shield', settings['stunman_shield'], :local)
+		gtk.add_entry(tbl, 0, 2, 'Stun sack:', 'stunman_sack', settings['stunman_sack'], :local)
+		gtk.add_entry(tbl, 1, 0, 'Stun item:', 'stunman_item', settings['stunman_item'], :local)
+		gtk.add_entry(tbl, 1, 2, 'Stun command:', 'stunman_command', settings['stunman_command'], :local)
+		gtk.add_entry(tbl, 2, 0, 'Stun delay:', 'stunman_delay', settings['stunman_delay'], :local)
+		
+		nb.append_page(tbl, Gtk::Label.new('Stun Maneuvers'))
+			
+		# Signals
+		gtk.window.signal_connect('delete_event') { done = true }
+		gtk.button['close'].signal_connect('clicked') { done = true }
+		gtk.button['save'].signal_connect('clicked') { save = true }
+		gtk.window.show_all
+	}
+	
+	before_dying { gtk.destroy_window(@me.settings)	}
+	
+	loop {
+		if save
+			smsg "#{@me.name}: Settings saved", true
+			
+			gtk.save_settings
+			save = false
+		end
+		break if done
+		
+		sleep 0.10
+	}
+	exit
+end
+
+def show_tasks
+	if (variable[3].nil?)
+		show_usage
+		smsg "  Tasks:"
+		
+		@skills[@skill]['tasks'].each { |task|
+			smsg "    #{task}"
+		}
+		exit
+	end	
+	
+	@task = variable[3].downcase
+	if (!@skills[@skill]['tasks'].include?(@task))
+		smsg "-- Invalid task specified"
+	end
+end
+
+def show_usage
+	skill = @skill if !@skill.nil?
+	skill = "<skill>" if @skill.nil?
+	
+	smsg "Usage:"
+	smsg "  ;srogue task #{skill}"
+	respond
+end
+
+def reps_left?
+	line = matchtimeout 1, "completed", "remaining"
+	@reps_left = false
+	@reps_left = true if line !~ /completed/	
+	return @reps_left
+end
+
+def do_pick	
+	if (!variable[2].nil?)
+		if (variable[2] =~ /client/i)
+			@pick_solo = false
+			change_pick(variable[3].to_i)
+		else
+			change_pick(variable[2].to_i)
+		end
+	end
+		
+	box = prepare_box
+	sleep 0.10
+	if (box.nil?)
+		smsg "-- You do not have any boxes needing picked", true
+		exit
+	end
+	
+	fput "get ##{box}" if GameObj.right_hand.id != box
+	detect_box(box) if GameObj.left_hand.noun !~ /lockpick/
+	
+	waitrt?
+	smsg "-- For now, there is a 5 second delay before picking in case I missed a trap", true
+	smsg "-- Stop me if I missed a trap by typing ;k srogue"
+	sleep 5
+	
+	find_lockpick if GameObj.left_hand.noun !~ /lockpick/
+	pick_box(box)
+	finish_box
+	
+	return do_pick
+end
+
+def change_pick(pick = @pick_current)
+	pick = @pick_current if pick.to_i == 0
+
+	waitrt?
+	fput "put my lockpick in my #{@me.settings['pick_case']}" if holding?('lockpick')
+	
+	if (pick == @pick_current)
+		@pick_current += 1
+	else
+		@pick_current = pick
+	end
+	
+	if (@pick_current < 1 or @pick_current > 5)
+		smsg "-- Valid values for pick are 1 through 5"
+		exit
+	end
+end
+
+def stow_lockpick
+	return if !holding?("lockpick")
+	putitem("my #{@me.settings["pick#{@pick_current}"]}", @me.settings['pick_case'])
+end
+
+def find_lockpick
+	waitrt?
+	(@pick_current..5).each { |pick|
+		getitem("my #{@me.settings["pick#{pick}"]}", @me.settings['pick_case'])
+		break if holding?("lockpick")
+	}
+end
+
+def check_hands
+	fput "swap" if checkleft =~ /box|coffer|chest|strongbox|trunk/
+	fput "stow left" if checkleft and checkleft !~ /lockpick/
+	
+	return nil if !checkleft and !checkright
+	return GameObj.right_hand.id
+end
+
+def detect_box(box)
+	fput "detect ##{box}"
+	line = matchtimeout 1, "nothing about it seems to indicate cause for alarm", "blink in surprise as though just becoming aware", "were you referring to", "small hole next to the lockplate with some sort of dark paste", "appears to be a plate over the lock", "metal recessed in the hole", "has been completely plugged", "glint of red", "cause the tumblers to crush the vial", "small ball of cotton has been pushed", "system for an explosive mixture", "prevent it from igniting", "jaws pressed flush against the (chest|strongbox|box|trunk|coffer) walls\.", "jaws pressed flush against the (chest|strongbox|box|trunk|coffer) walls\, but", "device which seems poised to shatter", "device which has been bent", "device which has a red glow", "key could shatter it\.", "key could shatter it,", "notice a small bladder filled", "notice a deflated bladder", "glyph spell\.", "glyph spell, but", "metal rods a hair's width", "metal rods that have been bent", "rods that have a slight reddish glow", "ends of springs incorporated", "no traps", "tube is capped", "tube has been plugged", "avoid cutting yourself", "cord dangling", "crimson glow seeps", "cord surrounded by a crimson", "gem would be caught amongst", "seems to be empty", "you spy.*scarab", "free of all", "scarab is surrounded", "granting sufficient access", "looks to have been sliced", "Roundtime"
+	
+	if line =~ /You blink in surprise/
+		smsg "-- Box is already open", true
+		finish_box
+	end
+	
+	return if line == false
+	return detect(box) if line =~ /Roundtime: 20 sec./
+	return disarm_box(box) if line =~ /inside chamber is coated with a strange white|metal recessed in the hole|cause the tumblers to crush the vial|jaws pressed flush against the (chest|strongbox|box|trunk|coffer) walls\.|device which seems poised to shatter|key could shatter it\.|notice a small bladder filled|glyph spell\.|metal rods a hair's width|ends of springs incorporated|tube is capped/
+	return disarm_box(box, :plated) if line =~ /to be a plate over the lock/
+	return disarm_box(box, :scales) if line =~ /avoid cutting yourself/
+	return disarm_box(box, :sphere) if line =~ /gem would be caught amongst/
+	return disarm_box(box, :scarab) if line =~ /scarab/
+end
+
+def disarm_box(box, type = :normal)
+	waitrt?
+	
+	case type
+		when :scarab
+			smsg "-- Scarab!", true
+			
+			if (@me.setting_enabled?('pick_scarabs'))
+				fput "disarm ##{box}"
+				if matchtimeout 1, "You carefully nudge"
+					smsg "-- Got it! Now to disarm the scarab...", true
+					sleep 1
+					@me.settings['scarab_disarm_count'].to_i.times { fput "disarm scarab" }
+					
+					fput "get scarab"
+					if (@pick_solo or @me.setting_enabled?('keep_scarabs'))
+						putitem('my scarab', Lich.lootsack)
+					else
+						fput "give my scarab to ##{@pick_target}"
+						line = matchtimeout 10, "accepted", "declined"
+						if line !~ /accepted/
+							putitem('my scarab', Lich.lootsack)
+						end
+					end
+					
+					return
+				end
+			else
+				fput "whisper ##{@pick_target} Sorry, I don't do scarabs." unless @pick_solo
+				finish_box
+			end
+			
+			return disarm_box(box, :scarab)
+		when :scales
+			if (@pick_scales)
+				smsg "-- I'll be damned, you made it!", true
+				
+				if (!getitem("my #{@me.settings['scales_weapon']}", @me.settings['scales_weapon_sack']))
+					fatal_error "-- Shiet! I can't disarm a scales without a mo' fuckin dagga!"
+				end
+				
+				fput line = "disarm ##{box}"
+				if matchtimeout 1, "Something just went horribly awry!", "You still have a good enough"
+					return disarm_box(box, :scales)
+				end
+				
+				putitem("my #{@me.settings['scales_weapon']}", @me.settings['scales_weapon_sack'])
+				@pick_scales = false
+				
+				return finish_box
+			else
+				smsg "-- Scales!", true
+				if (@me.setting_enabled?('pick_scales'))
+					smsg "-- Brace yourself for death, picking...", true
+					@pick_scales = true
+					
+					find_lockpick
+					return pick_box(box)
+				else
+					fput "whisper ##{@pick_target} Sorry, I don't do scales." unless @pick_solo
+					return finish_box
+				end
+			end
+		when :plated
+			smsg "-- Box is plated", true
+			vial = find_item(/vial/, @me.settings['component_sack'])
+			
+			if (vial.nil?)
+				smsg "-- You do not have any vials to remove the plate with!", true
+				
+				if (@pick_solo)
+					fput "drop ##{GameObj.right_hand.id}"
+					return do_pick
+				else
+					fput "whisper #{@pick_target} Dis' box has'a plate an' I kint moves it."
+					fput "give ##{@pick_target}"
+					waitfor "accepted"
+					return do_pick
+				end
+			end
+			
+			fput "get ##{vial}"
+			fput "pour ##{vial} on ##{box}"
+		when :sphere
+			find_lockpick
+			fput "disarm ##{box}"
+		else
+			fput "disarm ##{box}"
+	end
+	
+	if matchtimeout 1, "Something just went horribly awry!", "You still have a good enough"
+		return disarm_box(box)
+	end
+end
+
+def prepare_box
+	box = check_hands
+	return box if !box.nil?
+	
+	if (@pick_solo)
+		if (!SLoot.find('name', "#{Char.name} disk").nil?)
+			box = find_box("#{Char.name} disk")
+			
+			return box if !box.nil?
+		end
+		
+		return find_box("my #{Lich.boxsack}")
+	else
+		# You accept Portia's offer and are now holding a plain maoral coffer.
+		
+		status_tags
+		line = fput "accept"
+		status_tags
+		
+		if line =~ /You accept <a exist="(-\d+") noun="\w+">\w+<\/a>.+ offer and are now holding (?:a|an) <a exist="(\d+)" noun="(.+)">.+<\/a>\./
+			@pick_target = $1
+			@pick_box = $2
+			
+			if ($3 !~ /box|chest|coffer|trunk|strongbox/)
+				fput "whisper ##{@pick_target} I don't think that was meant for me."
+				fput "give ##{@pick_box} to ##{@pick_target}"
+				return prepare_box
+			end
+		else
+			smsg "-- Waiting on client", true
+			waitfor "offers you"
+			return prepare_box
+		end
+				
+		return GameObj.right_hand.id
+	end
+	
+	fatal_error("Error in prepare_box, I shouldn't be here!")
+end
+
+def find_box(container)
+	return find_item(/box|coffer|chest|strongbox|trunk/, container)
+end
+
+def find_item(item, container)
+	$srogue_pick_box = nil
+	
+	action = proc { |server_string|	
+		if (server_string =~ /<a exist="(\d+)" noun="(#{item})"/i)
+			$srogue_pick_box = $1
+			nil
+		end
+	}
+
+	DownstreamHook.add('SRogueFindItem', action)
+	line = fput "l in #{container}"
+	DownstreamHook.remove('SRogueFindItem')
+
+	return $srogue_pick_box
+end
+
+def pick_box(box)
+	roll = 0
+	status_tags
+	line = dothis "#{@me.settings['pick_command']} ##{box} with my lockpick", /attempt/
+	status_tags
+	loop {
+		if (line =~ /you realize you are using/)
+			change_pick
+			find_lockpick
+			return pick_box(box)
+		end		
+		
+		if (line =~ /^You make (?:a|an) \w+ attempt \(d100=(\d+)\)\.$|^You make (?:a|an) \w+ attempt \(d100\(open\)=(\d+)\)\.$/)
+			echo "-- Got roll of #{$1}"
+			roll = $1
+			break
+		end
+		
+		line = get
+	}
+	
+	line = waitfor "You are not able", "weakened by the stress", "CLICK!", "and learn little", "SNAP", "bending the tip", "Roundtime"
+	echo "-- Got pick line: #{line}"
+	case line
+		when /Then...CLICK!/
+			if (@pick_scales)
+				stow_lockpick
+				return disarm_box(box, :scales)
+			end
+			return
+		when /weakened|SNAP|bending the tip|fumbling/
+			change_pick
+			find_lockpick
+			return pick_box(box)
+		when /You are not able to pick the lock, but you get a feeling that it is within your abilities./
+			change_pick
+			find_lockpick
+			return pick_box(box)
+		when /You are not able to pick/
+			if (roll.to_i >= @me.settings['pick_roll'].to_i)
+				change_pick
+				find_lockpick
+			end
+			
+			waitrt?
+			return pick_box(box)
+		else
+			smsg "-- Unknown response [pick_box]"
+			smsg "-- Send SpiffyJr the following line at <spiffyjr@gmail.com>"
+			smsg line
+			exit
+	end
+end
+
+def finish_box
+	waitrt?
+	stow_lockpick
+	
+	if (@pick_solo)
+		smsg "-- I'm throwing in some delay in case I missed something (like a scales trap)", true
+		smsg "-- Ooh, piece of candy!", true
+		sleep 5
+		
+		fput "open ##{GameObj.right_hand.id}"
+		fput "get coins"
+		waitrt?
+		fput "empty ##{GameObj.right_hand.id} in my #{Lich.lootsack}"
+		waitrt?
+		
+		waste = SLoot.find('noun', /wastebasket|painted wooden barrel/)
+		fput "drop ##{GameObj.right_hand.id}" if waste.nil?
+		fput "put ##{GameObj.right_hand.id} in ##{waste.id}" if !waste.nil?
+	else
+		fput "give ##{GameObj.right_hand.id} to ##{@pick_target}"
+		waitfor "has accepted your offer"
+	end
+	
+	@pick_current = 1
+	@pick_target = nil
+end
+
+def do_task
+	if (variable[2].nil?)
+		show_usage
+		smsg "  Skills:"
+		
+		@skills.each_key { |key|
+			smsg "    #{key}"
+		}
+		
+		exit
+	end
+	
+	@skill = variable[2].downcase
+	
+	get_task
+	
+	if @task.nil?
+		show_tasks
+		exit
+	end
+	
+	send("task_#{@skill}_#{@task}")
+end
+
+def get_promoted
+	@go.go2_guild_place('guildmaster')
+	master = SNpc.find('name', /Guild Master/)
+	
+	fput "ask #{master.noun} for next"
+end
+
+def get_tool(tool)
+	return if holding?(tool)
+	
+	@go.go2_guild_place('equipment')
+	fput "get #{tool} from rack"
+end
+
+def stow_tool(tool)
+	return if !holding?(tool)
+	@go.go2_guild_place('equipment')
+	fput "put #{tool} on rack"
+end
+
+def get_task
+	if (!variable[3].nil?)
+		@task = variable[3].downcase
+		return
+	end	
+		
+	fput "gld"
+	waitfor @proper_name[@skill]
+	line = waitfor "You are not", "The training administrator told you"
+	reps = waitfor "You have", "GLD MENU"
+	
+	# Figure out what task is assigned based on the smsg in gld
+	@go.go2_guild_place('taskmaster') if checkarea !~ /Courtyard Center/
+	if (!(trainer = SNpc.find('name', /Training Administrator/)))
+		fatal_error("Unable to find Training Administrator")
+	end
+	
+	@skills[@skill]['task_smsg'].each_pair { |task, match|
+		if (line =~ match)
+			@task = task
+			
+			# If no repetitions are left then turn in task
+			if (reps =~ /You have no/ or line =~ /You currently have no/)												
+				fput "ask #{trainer.noun} for train #{@skill}"
+				break
+			else 
+				return
+			end
+		end
+	}
+
+	# Get new task if no reps are left or no current task assigned
+	fput "ask #{trainer.noun} for train #{@skill}"
+	
+	line = waitfor "You need to get promoted", "says"
+	if (line =~ /You need to get promoted/)
+		get_promoted
+	end
+	
+	get_task
+end
+
+def prepare_footpad
+	if (checkarea != /Dark Corner/)
+		@go.go2_guild_place('footpads')
+		footpad = SNpc.find('name', /Master Footpad/)
+		fput "ask #{footpad.noun} for train #{@skill}"
+	end
+end
+
+def task_cheapshot
+	show_tasks
+	send("task_#{@skill}_#{@task}")
+end
+
+def task_cheapshot_footpad
+	footpad = SNpc.find('name', /Master Footpad/)
+	prepare_footpad
+	
+	loop {
+		waitrt?
+		fput "cheapshot footstomp #{footpad.noun}"
+		break if !reps_left?
+	}
+	
+	waitrt?
+	fput "out"
+end
+
+def task_cheapshot_sweep
+	do_sweep
+end
+
+def task_cheapshot_windows
+	do_windows
+end
+
+def task_lmastery
+	show_tasks	
+	send("task_#{@skill}_#{@task}")
+end
+
+def task_lmastery_sense
+	dothis "lmastery sense", /With a seasoned/
+	line = waitfor "As far as you can tell, the area around you"
+	if (line =~ /As far as you can tell, the area around you (?:has|is) (.+)\./)
+		fput "'#{$1}"
+	end
+	
+	task_lmastery_sense if reps_left?
+end
+
+def task_stunman_arrows
+	commands = [
+		"lean left",
+		"lean right",
+		"duck",
+		"jump"
+	]
+	
+	prepare_footpad
+	
+	done = false
+	line = nil
+	loop {
+		waitrt?
+		fput "stand" if !standing?
+				
+		guess = rand(commands.size)
+		fput commands[guess]
+		
+		waitfor "fires an arrow!", "MOVE!", "How about you try", "see a snail", "is to dodge at least", "Do something!"		
+		break if !reps_left?
+	}
+	
+	fput "out"
+	return task_stunman_arrows if @reps_left
+end
+
+def task_stunman_footpad
+	prepare_footpad
+	
+	waitrt?
+	
+	left = GameObj.left_hand.noun
+	if (!left.nil?)
+		fput "wear #{left}"
+	end
+	
+	fput "nod"
+	loop { 
+		line = get
+		fput "nod" if line =~ /Enter NOD to/
+		break if stunned?; sleep 0.10 
+	}	
+	fput "unstun"
+	(0..12).each { |x| sleep 1 }
+	fput "stunman shield"
+	waitrt?
+	fput "stunman shield"
+	
+	return task_stunman_footpad if reps_left?
+	
+	fput "out"
+end
+
+def task_stunman_slaphands	
+	commands = [
+		"stop",
+		"slap",
+		"duck"
+	]
+	
+	prepare_footpad
+	
+	line = nil
+	loop {
+		waitrt?
+		fput "stand" if !standing?
+		waitrt?
+		
+		guess = rand(commands.size)
+		dothis commands[guess], /You place your/
+		
+		waitfor "You move", "You duck", "You steady", "Tension", "You stare", "You are knocked"
+		break if !reps_left?
+	}
+end
+
+def task_stunman_get_stunned
+	if (!checkleft.nil? or (!checkleft.nil? and checkright !~ /#{@me.settings['stunman_item']}/))
+		smsg "-- Your hands need to be empty or your stun item needs to be in the right hand"
+		
+		loop {
+			break if handsempty? or (!checkleft and checkright == @me.settings['stunman_item'])
+			sleep 0.10
+		}
+	end
+	
+	if (@me.settings['stunman_item'] == 'special')
+		@go.go2_guild_place('bar') if Room.current.title[0] !~ /lounge/i
+		item = find_item(/special/, @me.settings['stunman_sack']) if !holding?('special')
+
+		if (item.nil?)
+			line = fput "order 6" if !holding?('special')
+			
+			if (line =~ /If ya can't pay/)
+				cur_room = Room.current.id
+				@go.go2('bank')
+				line = fput "withdrawl 900"
+				
+				if (line =~ /have that much/)
+					smsg "-- You have no more coins left"
+					exit
+				end
+				@go.go2(cur_room)
+			end
+			
+			item = GameObj.right_hand.id
+		else
+			fput "get ##{item}"
+		end
+	else
+		fput "get my #{@me.settings['stunman_item']}" if !holding?(@me.settings['stunman_item'])
+		if (!holding?(@me.settings['stunman_item']))
+			smsg "-- Unable to find stunman item"
+			exit
+		end
+		
+		item = GameObj.right_hand.id
+	end
+
+	fput "#{@me.settings['stunman_command']} ##{item}"
+end
+
+def task_stunman_shield	
+	loop {
+		waitrt?
+		dothis "wear #{@me.settings['stunman_shield']}", /You sling/ if holding?(@me.settings['stunman_shield'])
+		task_stunman_get_stunned
+		
+		loop {
+			waitrt?
+			wait_until { checkstamina 10 }
+			sleep @me.settings['stunman_delay'].to_i if stunned?
+			line = dothis "stunman shield", /shakily|muscles|not stunned/ if stunned?
+						
+			break if !reps_left?
+			break if line =~ /not stunned/
+			break if !stunned?
+		}
+		
+		break if !@reps_left
+	}
+	
+	fput "wear ##{GameObj.left_hand.id}"
+	fput "put my #{@me.settings['stunman_item']} in my #{@me.settings['stunman_sack']}" if holding?(@me.settings['stunman_sack'])
+end
+
+def task_stunman_sweep
+	do_sweep
+end
+
+def task_stunman_windows
+	do_windows
+end
+
+def do_sweep	
+	get_tool("broom")
+	get_tool("bag")
+	
+	done = false
+	path = @go.get_guild_path("dirt")
+	path.split(',').each { |room|
+		@go.go2(room)
+		loop {
+			waitrt?
+			fput "push broom" if SLoot.find('noun', 'dirt')
+			
+			waitrt?
+			line = dothis "get pile", /Your bag is full|You gather/ if SLoot.find('noun', 'pile')
+			if (line =~ /Your bag is full/)
+				@go.go2_guild_place('equipment')
+				fput "put bag in bin"
+				done = !reps_left?
+			end
+			break
+			
+			break if done
+		}
+		
+		break if done
+	}
+	
+	do_sweep if !done
+	
+	stow_tool("bag")
+	stow_tool("broom")
+end
+
+def do_windows
+	get_tool("rag")
+	path = @go.get_guild_path("windows")
+	
+	path.split(',').each { |room|
+		@go.go2(room)
+		line = dothis "rub window", /^(?:You begin working|That's enough)/
+		break if !reps_left?
+	}
+	
+	waitrt?
+	return task_stunman_windows if @reps_left
+	
+	stow_tool("rag")
+end
+
+@me.load_settings
+before_dying { @me.save_settings }
+
+show_help if @me.show_help?
+show_setup if @me.show_setup?
+
+if (variable[1].nil?)
+	@me.show_help?(true)
+	show_help
+end
+
+@commands.each_pair { |command, func|
+	if (variable[1] =~ /^#{command}$/i)
+		send(func)
+	end
+}

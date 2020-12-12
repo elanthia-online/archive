@@ -1,0 +1,10 @@
+pc_name = nil
+
+while line = get
+  if /(?'pc_name'\w+) just nudged you/ =~ line
+    echo pc_name
+    start_script('waggle',[pc_name])
+    wait_while {running? 'waggle'}
+    sleep 0.5
+  end        
+end

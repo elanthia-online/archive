@@ -1,0 +1,2394 @@
+##quiet
+## vim: set ft=ruby:
+=begin
+
+    SGuild by SpiffyJr (spiffyjr@gmail.com)
+    
+    Does guild stuff.
+    
+     author: spiffyjr
+       name: SpiffyGuild
+       tags: guild rogue warrior
+    
+    Batter: in progress
+    Berserk: complete
+    Disarm: in progress
+        * masters: complete
+        * creatures: complete
+        * partner: n/a
+    Tackle: in progress
+    Tricks: complete
+    Warcries: complete
+
+    Cheapshots: n/a
+    Gambits: n/a
+    Lock Mastery: n/a
+    Subude: n/a
+    Stun Maneuvers: complete
+    Sweep: n/a
+
+=end
+
+CharSettings["loop"] ||= false
+CharSettings["loop-mind"] ||= 0
+CharSettings["loop-bounty"] ||= false
+CharSettings["loop-no-reset"] ||= false
+CharSettings["loop-no-vocal"] ||= false
+CharSettings["fried"] ||= false
+CharSettings["travel"] ||= false
+CharSettings["rest-enter"] ||= ""
+CharSettings["rest-exit"] ||= ""
+CharSettings["rest-room"] ||= 228
+CharSettings["rest-scripts"] ||= ["useherbs --buy-missing=on", "slootbeta sell"]
+CharSettings["wounded"] ||= StringProc.new "bleeding? || percenthealth <= 75 || ([Wounds.head, Scars.head].max >= 2) || ([Wounds.nsys, Scars.nsys].max >= 2) || ([Wounds.leftArm, Wounds.leftHand, Wounds.rightArm, Wounds.rightHand, Scars.leftArm, Scars.leftHand, Scars.rightArm, Scars.rightHand].max >= 3) || ( ([Wounds.leftArm, Wounds.leftHand, Scars.leftArm, Scars.leftHand].max >= 2) or ([Wounds.rightArm, Wounds.rightHand, Scars.leftArm, Scars.leftHand].max >= 2) )"
+CharSettings["field-prepare"] ||= ["gird"]
+CharSettings["field-finish"] ||= ["store all"]
+CharSettings["field-scripts"] ||= []
+CharSettings["field-targets"] ||= []
+CharSettings["field-room"] ||= ""
+CharSettings["loot-script"] ||= "slootbeta"
+CharSettings["audience-room"] ||= 228
+CharSettings["batter-trade"] ||= false
+CharSettings["partner-name"] ||= nil
+CharSettings["partner-room"] ||= nil
+CharSettings["partner-trade"] ||= false
+
+resting = false
+lootsack = GameObj[UserVars.lootsack]
+
+if lootsack.nil?
+  echo "** failed to find lootsack, set it with ;set change lootsack [container]"
+  exit
+end
+
+skill_short_to_long = {
+  "batter" => "Batter Barriers",
+  "berserk" => "Berserk",
+  "disarm" => "Disarm Weapon",
+  "tackle" => "Tackle",
+  "tricks" => "Warrior Tricks",
+  "warcries" => "War Cries",
+
+  "cheap" => "Cheap Shot",
+  "lmas" => "Lock Mastery",
+  "rgam" => "Rogue Gambits",
+  "stunman" => "Stun Maneuvers",
+  "subdue" => "Subdue",
+  "sweep" => "Sweep",
+}
+
+error = proc { |msg|
+  echo "** #{msg}"
+  exit
+}
+
+print = proc { |msg|
+  echo "-- #{msg}"
+}
+
+run_looter = proc {
+  next if GameObj.npcs.find_all { |npc| npc.status =~ /dead/ }.nil?
+
+  wait_while { running? CharSettings["loot-script"] }
+  start_script CharSettings["loot-script"]
+  wait_while { running? CharSettings["loot-script"] }
+}
+
+go2 = proc { |room|
+  next if Room.current.id.to_s == room.to_s
+  next if Room.current.tags.include?(room)
+
+  CharSettings["rest-exit"].split(",").each { |cmd| fput "#{cmd}" } if checkarea =~ /table/i
+
+  if sitting?
+    fput "stand"
+  end
+
+  if Room.current.title =~ /Table/
+    fput "out"
+  end
+
+  if CharSettings["travel"]
+    if room.class == String
+      room = Room.current.find_nearest_by_tag(room)
+    end
+
+    check = Room.current.dijkstra(room)[1][room]
+
+    if check > 30
+      if room.class != Map
+        Script.run("speed2", Room[room].location)
+      else
+        Script.run("speed2", room.location)
+      end
+    end
+  end
+
+  wait_while { running? "go2" }
+  start_script("go2", [room.to_s, "_disable_confirm_"])
+  wait_while { running? "go2" }
+}
+
+go2_nearest_tag = proc { |tag|
+  if Room.current.nil? and checkarea =~ /table/i
+    fput "stand" until standing?
+    fput "out"
+  end
+
+  room = Room.current.find_nearest_by_tag(tag)
+  if room.nil?
+    error.call "failed to find room by tag: #{tag}"
+  end
+
+  go2.call(room)
+}
+
+get_nearest_rooms_by_tag = proc { |tag|
+  rooms = Room.list.find_all { |room| room.tags.find { |t| t == tag } }
+  rooms = rooms.collect { |r| r.id }
+
+  rest_room = Room[CharSettings["rest-room"]]
+  previous, shortest_distances = Map.dijkstra(rest_room)
+
+  # used to set the max distance to allow travel to
+  distance = 10
+
+  # leaves don't need other guilds
+  if tag !~ /leaves/ and CharSettings["travel"]
+    if rest_room.location =~ /Ta'/
+      distance = 400
+    else
+      distance = 600
+    end
+  end
+
+  rooms.delete_if { |room| shortest_distances[room] > distance }
+  rooms.sort! { |a, b| shortest_distances[a] < shortest_distances[b] ? -1 : 1 }
+  rooms
+}
+
+visit_locker = proc { |action, item|
+  locker = CharSettings["locker"]
+
+  if locker.nil? or not locker
+    error.call "locker is not set"
+  end
+
+  go2.call "bank"
+  fput "withdraw 1000"
+  go2.call locker
+
+  if CharSettings["locker-in"].length > 0
+    CharSettings["locker-in"].each { |x| move x }
+  end
+
+  if entrance = (GameObj.loot.to_a + GameObj.room_desc.to_a).find { |obj| obj.noun =~ /^(?:opening|curtain)$/ }
+    move "go ##{entrance.id}"
+  else
+    erorr.call "failed to find locker entrance"
+  end
+
+  fput "open locker"
+  if action == "put"
+    fput "put #{item} in locker"
+  elsif action == "get"
+    fput "get #{item} from locker"
+    # premium, brute force
+    fput "get #{item}" if checkleft !~ /#{item}/ and checkright !~ /#{item}/
+  else
+    fput cmd
+  end
+
+  fput "close locker"
+
+  if entrance = (GameObj.loot.to_a + GameObj.room_desc.to_a).find { |obj| obj.noun =~ /^(?:opening|curtain)$/ }
+    move "go ##{entrance.id}"
+  else
+    erorr.call "failed to find locker exit"
+  end
+
+  if CharSettings["locker-out"].length > 0
+    CharSettings["locker-out"].each { |x| move x }
+  end
+
+  go2.call "bank"
+  fput "deposit all"
+}
+
+rest = proc { |run_scripts|
+  go2.call CharSettings["rest-room"]
+
+  if run_scripts.nil? or true == run_scripts
+    CharSettings["rest-scripts"].each { |s|
+      args = s.split(" ")
+      s = args.shift
+
+      start_script(s, args, true)
+      wait_while { running? s }
+    }
+  end
+
+  CharSettings["rest-enter"].split(",").each { |cmd| fput "#{cmd}" }
+  resting = true
+}
+
+rest_exit = proc {
+  next if not resting
+  CharSettings["rest-exit"].split(",").each { |cmd| fput "#{cmd}" }
+  resting = false
+}
+
+prepare_field = proc {
+  if CharSettings["field-room"].to_s.length == 0
+    error.call "missing field-room"
+  end
+
+  CharSettings["field-prepare"].each { |cmd| fput cmd }
+  CharSettings["field-scripts"].each { |s| start_script s unless running? s }
+  go2.call CharSettings["field-room"]
+}
+
+finish_field = proc {
+  go2.call CharSettings["rest-room"]
+  CharSettings["field-finish"].each { |cmd| fput cmd }
+  CharSettings["field-scripts"].each { |s| kill_script s if running? s }
+
+  rest.call
+}
+
+get_field_targets = proc {
+  GameObj.targets.find_all { |npc| CharSettings["field-targets"].find { |target| npc.name =~ /#{target}/ } }
+}
+
+wander = proc {
+  until checkstance("guarded") or checkstance("defensive")
+    fput "stance defensive"
+    sleep 0.25
+  end
+  start_script "wander", CharSettings["field-targets"] unless running? "wander"
+  wait_while { running? "wander" }
+}
+
+wait_for_stamina = proc {
+  print.call "waiting for stamina"
+  print.call "no input is required"
+  wait_until { percentstamina 80 }
+}
+
+get_promoted = proc { |skill|
+  print.call "going to get promoted"
+
+  if Char.prof == "Rogue"
+    go2_nearest_tag.call "rogue guild master"
+  else
+    go2_nearest_tag.call "warrior guild guildmaster"
+  end
+
+  npc = GameObj.npcs.find { |npc| npc.name =~ /Guild Master/ }
+
+  if npc.nil?
+    error.call "failed to find guildmaster for promotion"
+  end
+
+  res = dothistimeout "ask ##{npc.id} for next #{skill}", 1, /Congratulations|train a little|before you can be/i
+  if res =~ /To rise to the top/
+    error.call "you must diversify your skills to continue in #{skill}"
+  end
+}
+
+get_skill_full = proc { |skill|
+  if skill.nil?
+    error.call "error, no skill given"
+  end
+
+  if not skill_short_to_long.include? skill
+    error.call "skill #{skill} could not be found"
+  end
+
+  skill_short_to_long[skill]
+}
+
+find_administrator = proc {
+  npc = GameObj.npcs.find { |n| n.name =~ /Training Administrator/ }
+
+  if npc.nil?
+    error.call "failed to find training administrator"
+  end
+
+  npc
+}
+
+trade_in = proc { |skill|
+  print.call "trading in partner task for #{skill}"
+  print.call "you have 5 seconds to kill me"
+
+  sleep 5
+
+  if Char.prof == "Rogue"
+    go2_nearest_tag.call "rogue guild administrator"
+  else
+    go2_nearest_tag.call "warrior guild administrator"
+  end
+
+  npc = find_administrator.call
+
+  multifput "ask ##{npc.id} for trade #{skill}", "ask ##{npc.id} for train #{skill}"
+}
+
+turn_in = proc { |skill|
+  if not CharSettings["fried"] and checkmind("saturated")
+    rest.call(false)
+    print.call "resting your mind before turning in"
+    wait_while { percentmind(100) }
+    rest_exit.call
+  end
+
+  print.call "turning in task for #{get_skill_full.call skill}"
+
+  if Char.prof == "Rogue"
+    go2_nearest_tag.call "rogue guild administrator"
+  else
+    go2_nearest_tag.call "warrior guild administrator"
+  end
+
+  npc = find_administrator.call
+
+  multifput "ask ##{npc.id} for train #{skill}", "ask ##{npc.id} for train #{skill}"
+}
+
+get_skill_info = proc { |skill|
+  done = false
+  read = false
+  info = {}
+
+  print.call "collecting #{get_skill_full.call(skill)} task information"
+
+  action = proc { |server_string|
+    if server_string =~ /You have (no|\d+) ranks? in the #{get_skill_full.call(skill)} skill\./i
+      read = true
+      info["ranks"] = $1.to_i
+    end
+
+    if read
+      # General stuff
+      if server_string =~ /^You need (\d+) training points/
+        info["points"] = $1.to_i
+      elsif server_string =~ /You have earned enough training points/
+        info["promoted"] = true
+        read = false
+      elsif server_string =~ /You have no repetitions|You are not currently training/
+        info["reps"] = 0
+        read = false
+      elsif server_string =~ /You have (\d+) repetitions? remaining/
+        info["reps"] = $1.to_i
+        read = false
+        # Tricks / Warcries
+      elsif server_string =~ /The Training Administrator told you to (?:(?:get a)\s)?((?:spiff up|rake|skilled master|scrub|polish))(?:\s(?:the shrubbery|the guild floors|to teach some war cry techniques|the armor in the guild|the guild yard))?\./
+        info["task"] = $1.to_s.strip
+      elsif server_string =~ /The Training Administrator told you to practice (.*) on creatures\./
+        info["task"] = "creatures"
+        info["warcry"] = $1.to_s.strip
+        # Berserk
+      elsif server_string =~ /The Training Administrator told you to (?:(?:practice|go practice in the|go visit the|go out and practice Berserk against|get a partner to)\s)?(breaking (?:paralysis|stuns|webs)|saunas|ice tubs|creatures|Balancing|Draw|Spin|Drop-n-Roll|Kick-n-Sheath|Twirl-n-Sheath|Sheath Catch|Weapon Hop|Initial|Weapon Flip|Guzzle|polish|prune|scrub|Spin Attack|Spit|Feint|Juggling|skilled masters|rake|Backflip|Haircut|Toss-n-Slice|teach)(?:\s(?:some shrubbery|some war cry techniques|the floors|the guild yard|the armor around the guild|in the Dark Chamber|for an audience|on a suitable creature))?\./
+        info["task"] = $1.to_s.strip
+        # Disarm
+      elsif server_string =~ /The Training Administrator told you to (?:(?:practice disarming(?: a)?|get a lesson from the|let a)\s)?(creatures|skilled masters|partner(?: disarm)?)(?:\s(?:with an?|on disarming|an?) (\w+)(?: weapons?)?)?(?: from you)?\./
+        info["task"] = $1.to_s.strip
+        info["type"] = $2.to_s.strip
+      elsif server_string =~ /The Training Administrator told you to use a practice (\w+) weapons? with the Wheel\./
+        info["task"] = "wheel"
+        info["type"] = $1.to_s
+        # Batter
+      elsif server_string =~ /The Training Administrator told you to (?:go )?break (?:up|down) some (old boards|branches|sheet metal)/
+        info["task"] = $1.to_s
+      elsif server_string =~ /The Training Administrator told you to practice on the ((?:wooden|metal) (?:stage door)) in the guild(?: with (?:a|your) (shoulder|weapon))?\./
+        info["task"] = $1.to_s
+        info["weapon"] = $2.to_s
+      elsif server_string =~ /The Training Administrator told you to bash open some boxes from creatures\./
+        info["task"] = "creatures"
+      elsif server_string =~ /The Training Administrator told you to bash some cheap practice boxes\./
+        info["task"] = "practice boxes"
+        # Tackle
+      elsif server_string =~ /The Training Administrator told you to practice tackling .*(partner|creatures)\./
+        info["task"] = $1.to_s
+      elsif server_string =~ /The Training Administrator told you to practice defending against tackles\./
+        info["task"] = "defend"
+      elsif server_string =~ /The Training Administrator told you to work with the skilled masters\./
+        info["task"] = "skilled masters"
+      elsif server_string =~ /The Training Administrator told you to work with the tackling dummies\./
+        info["task"] = "dummies"
+        # Stun Maneuvers
+      elsif server_string =~ /The Training Administrator told you to let a footpad shoot arrows at you\./
+        info["task"] = "arrows"
+      elsif server_string =~ /The Training Administrator told you to visit the footpads for some lessons\./
+        info["task"] = "footpads"
+      elsif server_string =~ /The Training Administrator told you to play a few rounds of slap hands with a footpad\./
+        info["task"] = "slaphands"
+      elsif server_string =~ /The Training Administrator told you to practice defending yourself a little more while stunned\./
+        info["task"] = "stun"
+      elsif server_string =~ /The Training Administrator told you to sweep the guild courtyard\./
+        info["task"] = "sweep"
+      elsif server_string =~ /The Training Administrator told you to clean the windows in the guild\./
+        info["task"] = "windows"
+        # Subdue
+      elsif server_string =~ /The Training Administrator told you to try and subdue some creatures\./
+        info["task"] = "creatures"
+      end
+    end
+    if server_string =~ /^You are a (?:member|master)|^You are current with your dues|You currently have \d+|You are not currently training|You have \d+ ranks? in the|You need \d+ training points|The Training Administrator told you|You have \d+ repetitions remaining|You are a Master of|You will need to do/
+      nil
+    elsif server_string =~ /^Click .*GLD MENU.* for additional commands./
+      done = true
+      nil
+    elsif not server_string.nil? and not server_string.empty? and server_string !~ /\r\n||&gt;/
+      server_string
+    end
+  }
+
+  DownstreamHook.add "sguild_get_task", action
+  $_SERVER_.puts "#{$cmd_prefix}gld\n"
+  start = Time.now.to_f
+  wait_until { done or Time.now.to_f - start >= 3.0 }
+  DownstreamHook.remove "sguild_get_task"
+
+  if info["promoted"]
+    get_promoted.call skill
+    get_skill_info.call skill
+  elsif info["reps"] == 0
+    turn_in.call skill
+    get_skill_info.call skill
+  else
+    info
+  end
+}
+
+wait_on_partner_confirmation = proc { |partner, question|
+  print.call "waiting for partner to acknowledge; NOD to skip"
+  result = dothistimeout "whisper #{partner} #{question}", 10, /^(#{partner} whispers\, \"I am ready\.\"|You nod\.)$/i
+  if result =~ /^(#{partner} whispers\, \"I am ready\.\"|You nod\.)$/
+    nil
+  elsif result.nil?
+    print.call "Partner did not respond, asking again."
+    next wait_on_partner_confirmation.call(partner, question)
+  end
+}
+
+get_tool = proc { |tool|
+  next if checkleft == tool or checkright == tool
+
+  if Char.prof == "warrior"
+    go2_nearest_tag.call "warrior guild cleaning supplies"
+  else
+    go2_nearest_tag.call "rogue guild tools"
+  end
+
+  dothistimeout "get #{tool}", 1, /You pick out/
+
+  if checkleft != tool and checkright != tool
+    error.call "failed to get tool #{tool}"
+  end
+}
+
+store_tool = proc { |tool, room|
+  next if checkleft != tool and checkright != tool
+
+  if Char.prof == "warrior"
+    go2_nearest_tag.call "warrior guild cleaning supplies"
+  else
+    go2_nearest_tag.call "rogue guild tools"
+  end
+
+  dothistimeout "put #{tool} on rack", 1, /You put|You return/
+
+  if checkleft == tool or checkright == tool
+    error.call "failed to store tool #{tool}"
+  end
+}
+
+clear_hands = proc {
+  tools = ["bag", "rake", "duster", "brush", "shears", "rag", "broom"]
+  weapons = ["two-handed sword"]
+
+  next if checkleft.nil? and checkright.nil?
+
+  if tools.include?(checkleft)
+    store_tool.call(checkleft)
+  end
+
+  if tools.include?(checkright)
+    store_tool.call(checkright)
+  end
+
+  if weapons.include?(checkleft)
+    #fput "drop #{checkleft}"
+  end
+
+  if weapons.include?(checkright)
+    #fput "drop #{checkright}"
+  end
+
+  fput "store all" if checkleft or checkright
+  fput "stow all" if checkleft or checkright
+  empty_hands if checkleft or checkright
+}
+
+clear_locker = proc {
+  if not CharSettings["locker"]
+    next
+  end
+
+  batter_weapon = CharSettings["batter-weapon"]
+
+  if batter_weapon
+    waitrt?
+
+    if checkleft !~ /#{batter_weapon}/ and checkright !~ /#{batter_weapon}/
+      fput "get my #{batter_weapon}"
+    end
+
+    sleep 0.25
+    if checkright =~ /#{batter_weapon}/ or checkleft =~ /#{batter_weapon}/
+      visit_locker.call("put", CharSettings["batter-weapon"])
+    end
+  end
+}
+
+get_snack = proc { |type, count|
+  if type !~ /drink|food/
+    error.call "invalid type: expected drink or food"
+  end
+
+  snacks = {
+    "drink" => /lemonade|ale|piledriver|wine|stout|lager/i,
+    "food" => /sandwich|tart/,
+  }
+
+  snack = snacks[type]
+  my_snacks = lootsack.contents.find_all { |i| i.name =~ snack }
+
+  if count.nil?
+    next if checkleft =~ snack or checkright =~ snack
+    #clear_hands.call
+
+    if my_snacks.empty?
+      error.call "your out of snack: " + snack
+    end
+
+    fput "get ##{my_snacks.shift.id}"
+    next
+  end
+
+  go2_nearest_tag.call("warrior guild snacks")
+
+  bar = GameObj.loot.find { |l| l.noun =~ /bar|table|counter/i }
+
+  if bar.nil?
+    error.call "failed to find bar with snacks"
+  end
+
+  if bar.contents.nil?
+    fput "look on ##{bar.id}"
+  end
+
+  item = bar.contents.find { |l| l.noun =~ snack }
+
+  if item.nil?
+    error.call "failed to find #{type}"
+  end
+
+  (count - lootsack.contents.find_all { |i| i.name == item.name }.length).times {
+    done = false
+    while not done
+      res = dothistimeout "get #{item} from ##{bar.id}", 1, /You just poured yourself|You just grabbed|You pour yourself|Greedy, greedy/
+      if res =~ /Greedy/i
+        sleep 5
+      else
+        done = true
+      end
+    end
+    fput "stow my #{item}"
+  }
+}
+
+do_task_command = proc { |cmd, extra|
+  matches = ["You should wait", 'You have \d+ repetition', "completed", "You have already finished that task"]
+  if extra.nil?
+    extra = []
+  end
+
+  res = dothistimeout cmd, 3, /#{(matches + extra).join("|")}/i
+  waitrt?
+  res
+}
+
+do_path_task = proc { |task|
+  res = rooms = tag = tools = action = nil
+
+  case task
+  when "polish"
+    delay = 300
+    tools = ["rag"]
+    tag = "warrior guild armor"
+    action = proc {
+      do_task_command.call "rub armor", nil
+    }
+  when /prune|spiff up/
+    delay = 300
+    tools = ["shears"]
+    tag = "warrior guild shrubbery"
+    action = proc {
+      if obj = GameObj.loot.find { |l| l.name =~ /bush|hedge|shrub|topiar/i }
+        do_task_command.call "prune ##{obj.id}", nil
+      end
+    }
+  when "rake"
+    tag = "warrior guild leaves"
+    tools = ["rake", "bag"]
+    action = proc {
+      while GameObj.loot.find { |l| l.name =~ /leaves/i }
+        fput "pull my rake"
+        waitrt?
+      end
+      pile = GameObj.loot.find { |l| l.name =~ /pile/i }
+      next if pile.nil?
+
+      res = dothistimeout "get ##{pile.id}", 3, /You gather a leaf pile/
+
+      if res !~ /You gather a leaf pile/
+        error.call "unknown leaf result: " + res.to_s
+      end
+
+      res = dothistimeout "look in my bag", 3, /The bag is full of leaves|nothing|more/
+      if res =~ /The bag is full of leaves/
+        print.call "turning in leaves"
+        go2_nearest_tag.call "warrior guild cleaning supplies"
+        res = do_task_command.call("put my bag in bin", nil)
+      end
+
+      res
+    }
+  when "scrub"
+    delay = 300
+    tools = ["brush"]
+    tag = "warrior guild floor"
+    action = proc {
+      fput "kneel"
+      do_task_command.call "clean floor", nil
+    }
+  when "sweep"
+    delay = 300
+    tools = ["bag", "broom"]
+    tag = "rogue guild dirt"
+    action = proc {
+      while GameObj.loot.find { |l| l.name =~ /dirt/i }
+        res = dothistimeout "push my broom", 3, /You sweep up some dirt|There is no dirt here to sweep/
+        if res =~ /There is no dirt/
+          break
+        end
+        waitrt?
+      end
+      pile = GameObj.loot.find { |l| l.name =~ /pile/i }
+      next if pile.nil?
+
+      res = dothistimeout "get ##{pile.id}", 3, /You gather a dirt pile|You don't see a dirt pile/
+
+      if res.nil?
+        error.call "unknown dirt result"
+      end
+
+      res = dothistimeout "look in my bag", 3, /The bag is full of dirt|nothing|more/
+      if res =~ /The bag is full of dirt/
+        print.call "turning in dirt"
+        go2_nearest_tag.call "rogue guild tools"
+        res = do_task_command.call("put my bag in bin", nil)
+      end
+
+      res
+    }
+  when "windows"
+    delay = 300
+    tools = ["rag"]
+    tag = "rogue guild window"
+    action = proc {
+      if obj = GameObj.loot.find { |l| l.name =~ /window/i }
+        do_task_command.call "rub ##{obj.id}", ["That's enough cleaning for this"]
+      end
+    }
+  end
+
+  if action.nil?
+    error.call "path task #{task} not implemented"
+  end
+
+  rooms = get_nearest_rooms_by_tag.call tag
+  current = 0
+
+  if rooms.nil?
+    error.call "failed to find rooms for path task #{task}"
+  end
+
+  while res !~ /completed|finished/
+    room = rooms[current]
+    current = current + 1
+    need_tools = false
+
+    tools.each { |tool| get_tool.call tool }
+
+    waitrt?
+
+    # need to store the tool to get in other location
+    if Room.current.location != Room[room].location
+      tools.each { |tool| store_tool.call tool }
+      need_tools = true
+    end
+
+    go2.call room
+
+    if need_tools
+      tools.each { |tool| get_tool.call tool }
+    end
+
+    # for sweep/rake we just reset the loop
+    if (task == "rake" or task == "sweep") and current >= rooms.length
+      current = -1
+    end
+
+    res = action.call
+
+    if res !~ /completed|finished/ and current >= rooms.length
+      rest.call(false)
+
+      if CharSettings["loop-no-reset"]
+        print.call "exiting because loop-no-reset is true"
+        exit
+      end
+
+      current = 0
+      print.call "waiting #{delay} seconds for reset"
+      print.call "no input is required"
+
+      start = delay
+      while true
+        start = start - 1
+        break if start <= 0
+
+        if start % 30 == 0
+          print.call "still waiting #{start} seconds for guild to reset"
+        end
+
+        sleep 1
+      end
+    end
+
+    waitrt?
+  end
+
+  tools.each { |tool| store_tool.call tool }
+}
+
+do_berserk = proc {
+  print.call "running berserk routine"
+
+  info = get_skill_info.call "berserk"
+  berserking = false
+  done = false
+
+  can_berserk = proc {
+    get_field_targets.call.length > 0 and
+    GameObj.loot.find { |l| l.noun =~ /disk/ and l.name !~ /#{Char.name}/ }.nil?
+  }
+
+  go_berserk = proc { |field|
+    while true
+      if not berserking
+        while not checkstance "defensive" and not checkstance "guarded"
+          result = dothistimeout "stance defensive", 3, /You are now in a/
+
+          if result =~ /You are now in a/
+            break
+          end
+        end
+
+        while not field or can_berserk.call
+          waitrt?
+
+          if not checkstamina 20
+            if field
+              room = Room.current.id
+              finish_field.call
+            end
+
+            wait_for_stamina.call
+
+            if field
+              prepare_field.call
+            end
+          end
+
+          res = dothistimeout "berserk", 1, /Everything around you|Roundtime|You scream with a maniacal/
+          if res =~ /Everything around you|You scream with a maniacal/
+            break
+          elsif res =~ /Roundtime: (\d+) sec/
+            sleep ($1.to_i - 1)
+          end
+        end
+
+        berserking = true
+      end
+
+      line = get
+      if line =~ /You have completed/ or reget.find { |l| l =~ /You have completed/ } or CharSettings["wounded"].call
+        done = true
+        break
+      elsif line =~ /The redness fades from the world/
+        berserking = false
+        break if field
+      end
+    end
+
+    while berserking and dothistimeout "stop berserk", 1, /You try to regain control/
+      sleep 3
+    end
+
+    run_looter.call
+
+    berserking = false
+  }
+
+  do_field_berserk = proc {
+    while not done
+      wander.call
+
+      if can_berserk.call and not done
+        go_berserk.call true
+      end
+
+      sleep 0.25
+    end
+
+    finish_field.call
+  }
+
+  do_reps = proc { |cmd|
+    while true
+      res = dothistimeout cmd, 1, /You try to|You splash|start berserking/
+      break if res =~ /start berserking/
+      waitrt?
+    end
+
+    go_berserk.call
+    fput "stand" until standing?
+    fput "out"
+
+    rest.call
+  }
+
+  if not percentstamina 80
+    rest.call(false)
+    wait_for_stamina.call
+  end
+
+  rest_exit.call
+
+  case info["task"]
+  when "creatures"
+    print.call "doing field reps"
+    prepare_field.call
+    do_field_berserk.call
+    finish_field.call
+  when "ice tubs"
+    print.call "practicing in ice tubs"
+    go2_nearest_tag.call "warrior guild icetub"
+    fput "go tub"
+    do_reps.call "splash"
+  when "saunas"
+    print.call "practicing in sauna"
+    go2_nearest_tag.call "warrior guild sauna"
+
+    room = (GameObj.room_desc + (GameObj.loot ? GameObj.loot : [])).find { |l| l.noun =~ /sauna|spring/ }
+    fput "go ##{room.id}"
+    do_reps.call "meditate"
+  when /breaking (?:paralysis|stuns|webs)/
+    print.call "practicing breaking stuns"
+
+    go2_nearest_tag.call "warrior guild dark attendant"
+    fput "kneel"
+    go_berserk.call
+  else
+    error.call "unknown task #{info["task"]} for berserk"
+  end
+}
+
+rest_vocal_cords = proc {
+  if CharSettings["loop-no-vocal"]
+    print.call "exiting because loop-no-vocal is true"
+    exit
+  end
+
+  rest.call
+
+  while true
+    if CharSettings["loop"] and percentmind < CharSettings["loop-mind"].to_i
+      print.call "exiting because mind is below loop threshold"
+      exit
+    end
+
+    res = dothistimeout "warcry", 3, /Your vocal cords are in perfect condition\./
+    if res =~ /Your vocal cords/
+      rest_exit.call
+      break
+    else
+      print.call "vocal cords are not ready yet"
+    end
+
+    sleep 30
+  end
+}
+
+get_disarm_weapon = proc {
+  info = get_skill_info.call "disarm"
+
+  type_to_user_weapon = {
+    "brawling" => "brawling",
+    "polearms" => "polearm",
+    "edged" => "edged",
+  }
+
+  weapon = CharSettings["weapon-#{type_to_user_weapon[info["type"]]}"]
+
+  fput "stow right" if checkright and checkright !~ /#{weapon}/
+  fput "get #{weapon} from my #{CharSettings["weapon-sheath"]}"
+  sleep 1
+
+  if checkright !~ /#{weapon}/i
+    finish_field.call
+    error.call "failed to find #{weapon} in your #{CharSettings["weapon-sheath"]}"
+  end
+}
+
+do_field = proc { |cmd, req_stamina|
+  target = nil
+  started = false
+  last_action = Time.now.to_i
+
+  while true
+    # let creatures despawn in case of hangups
+    if started and (Time.now.to_i - last_action) > 60
+      finish_field.call
+      print.call "letting critter area despawn (5 minutes)"
+      print.call "no input is required"
+      sleep 300
+      prepare_field.call
+      last_action = Time.now.to_i
+    end
+
+    if not checkstamina req_stamina
+      room = Room.current.id
+      finish_field.call
+      wait_for_stamina.call
+      prepare_field.call
+    end
+
+    if target.nil?
+      wander.call
+    end
+
+    started = true
+
+    targets = get_field_targets.call
+    if targets.length > 1 or GameObj.targets.length > 1
+      target = nil
+      next
+    end
+
+    target = targets.first
+
+    fput "stand" until standing?
+
+    if cmd =~ /subdue/i
+      loop do
+        fput "hide"
+        break if hidden?
+        waitrt?
+      end
+    end
+
+    if cmd =~ /disarm|subdue|tackle/i
+      until checkstance("offensive")
+        fput "stance offensive"
+        sleep 0.25
+      end
+    end
+
+    line = fput sprintf(cmd, "#" + target.id.to_s)
+    waitrt?
+
+    if line =~ /You have completed/ or reget.find { |l| l =~ /You have completed/ } or CharSettings["wounded"].call
+      break
+    elsif line =~ /Your mouth is too dry at the moment\./
+      last_action = Time.now.to_i
+      fput "stance defensive" until checkstance("defensive")
+      delay = 15
+      print.call "waiting #{delay} seconds for mouth to moisten"
+      print.call "no input is required"
+
+      sleep delay
+    elsif CharSettings["wounded"].call
+      break
+    elsif line =~ /is not holding a weapon|is already prone/
+      print.call("waiting for target to stand up")
+      wait_until {
+        GameObj.npcs.find_all { |npc| npc.type =~ /aggressive/i }.length > 1 or
+        target.status.nil? or
+        target.status !~ /prone/i
+      }
+    elsif line =~ /You need to give your vocal cords a bit of a rest!/
+      rest_vocal_cords.call
+      break
+    elsif line =~ /You haven't learned how to disarm without a weapon!/
+      last_action = Time.now.to_i
+      get_disarm_weapon.call
+    else
+      last_action = Time.now.to_i
+    end
+
+    if cmd =~ /warcry/
+      print.call "sleeping 10 seconds to rest vocal chords"
+      sleep 10
+    else
+      sleep 0.25
+    end
+  end
+  fput "stance defensive" until checkstance "defensive"
+}
+
+do_disarm = proc {
+  print.call "running disarm routine"
+  info = get_skill_info.call "disarm"
+
+  type_to_practice_weapon = {
+    "brawling" => "club",
+    "polearms" => "halberd",
+    "edged" => "broadsword",
+  }
+
+  disarm = proc { |weapon, target, stamina|
+    while true
+      if GameObj.loot.find { |l| l.name =~ /#{weapon}/i } and checkleft !~ /#{weapon}/ and checkright !~ /#{weapon}/
+        waitrt?
+        fput "get #{weapon}"
+      end
+
+      if not checkstamina(stamina)
+        wait_for_stamina.call
+      end
+
+      fput "stance offensive" until checkstance("offensive")
+      res = do_task_command.call("disarm #{target}", ["is not holding a weapon", "broken workout wheel"])
+
+      if res =~ /completed/
+        break
+      elsif res =~ /is not holding/
+        waitrt?
+        fput "stance defensive" until checkstance("defensive")
+        waitfor "stoops and picks up", "picks a"
+      elsif res =~ /The broken workout wheel/
+        waitrt?
+        fput "fix wheel"
+      end
+
+      waitrt?
+      sleep 0.10
+    end
+  }
+
+  case info["task"]
+  when "creatures"
+    print.call "disarming creatures with #{info["type"]}"
+
+    clear_hands.call
+
+    prepare_field.call
+    weapon = get_disarm_weapon.call
+
+    do_field.call("disarm %s", 12)
+
+    finish_field.call
+
+    clear_hands.call
+  when "wheel"
+    print.call "disarm the wheel"
+    go2.call "warrior guild wheel"
+
+    move "go wheel"
+
+    weapon = type_to_practice_weapon[info["type"]]
+
+    res = dothistimeout "get #{weapon}", 3, /You reach out and grab/
+    if res !~ /You reach out/
+      error.call "failed to get #{weapon.inspect} for training: " + res.inspect
+    end
+
+    disarm.call(weapon, "wheel", 12)
+
+    waitrt?
+    fput "drop #{weapon}"
+    fput "out"
+  when "partner"
+    print.call "disarming a partner"
+
+    if CharSettings["partner-trade"]
+      trade_in.call("disarm")
+    else
+      error.call "not yet implemented"
+    end
+  when "partner disarm"
+    print.call "letting a partner you"
+
+    if CharSettings["partner-trade"]
+      trade_in.call("disarm")
+    else
+      error.call "not yet implemented"
+    end
+  when "skilled masters"
+    print.call "lessons from skilled masters"
+    go2.call "warrior guild masters"
+
+    npc = GameObj.npcs.first
+    res = dothistimeout "ask ##{npc.id} for training disarm", 60, /Disarm Weapon/
+
+    if res.nil?
+      error.call "unknown disarm result"
+    end
+
+    weapon = type_to_practice_weapon[info["type"]]
+
+    res = dothistimeout "get #{weapon}", 3, /You reach out and grab/
+    if res !~ /You reach out/
+      error.call "failed to get #{weapon.inspect} for training: #{res.inspect}"
+    end
+
+    disarm.call(weapon, "##{npc.id}", 12)
+
+    waitrt?
+    fput "drop #{weapon}"
+    fput "out"
+  else
+    error.call "task #{info["task"]} not yet implemented"
+  end
+}
+
+do_warcries = proc {
+  print.call "running warcries routine"
+  info = get_skill_info.call "warcries"
+
+  warcry_map = {
+    'Bertrandt\'s Bellow' => "bellow",
+    'Gerrelle\'s Growl' => "growl",
+    'Yertie\'s Yowlp' => "yowlp",
+    'Seanette\'s Shout' => "shout",
+    'Carn\'s Cry' => "cry",
+    'Horland\'s Holler' => "holler",
+  }
+
+  case info["task"]
+  when /spiff up|polish|rake|scrub/
+    print.call "doing busy work"
+    do_path_task.call(info["task"])
+    next
+  when "creatures"
+    print.call "warcry creatures"
+
+    prepare_field.call
+    do_field.call("warcry #{warcry_map[info["warcry"]]} %s", 0)
+    finish_field.call
+  when "teach"
+    print.call "learn from partner"
+    if CharSettings["partner-trade"]
+      trade_in.call("warcries")
+      next
+    end
+    if not GameObj.pcs.find { |pc| pc.name == CharSettings["partner-name"] }
+      print.call "running to partner"
+      go2.call CharSettings["partner-room"]
+    end
+
+    wait_on_partner_confirmation.call(CharSettings["partner-name"], "Can you teach me warcries?")
+    while line = get
+      if line =~ /#{CharSettings["partner-name"]} pulls you aside and demonstrates how (.*) is done\./i
+        warcry = $1.to_s
+        break
+      elsif line =~ /#{CharSettings["partner-name"]} whispers\, \"Sorry I am unable to teach you\. You either have more skill ranks than I do or you have the same amount but are a higher level\.\"/i
+        error.call "partner is not experienced enough to teach you"
+      end
+    end
+
+    if not warcry_map[warcry]
+      error.call "failed to find #{warcry} in map"
+    end
+
+    warcry = warcry_map[warcry]
+    count = 0
+    while true
+      waitrt?
+      res = do_task_command.call("warcry " + warcry, ["a bit of a rest"])
+
+      if res =~ /completed/
+        fput "whisper #{CharSettings["partner-name"]} All finished. Thank you!"
+        break
+      elsif res =~ /a bit of a rest/
+        fput "whisper #{CharSettings["partner-name"]} I need to give my throat a rest."
+        rest_vocal_cords.call
+        break
+      end
+
+      print.call "waiting 10 seconds for vocal chords"
+      sleep 10
+
+      count += 1
+      if count == 8
+        fput "whisper #{CharSettings["partner-name"]} I need another lesson please."
+        count = 0
+        sleep 2
+      end
+    end
+
+    waitrt?
+  when "skilled master"
+    go2.call "warrior guild masters"
+
+    npc = GameObj.npcs.first
+    res = dothistimeout "ask ##{npc.id} for training warcries", 60, /Let me demonstrate|Let me show you|Now I show you|How about I show you/
+
+    if res =~ /(#{warcry_map.keys.join("|")})/i
+      warcry = warcry_map[$1]
+    end
+
+    if warcry.nil?
+      error.call "missing warcry command for: " + $1.inspect
+    end
+
+    while true
+      waitrt?
+      res = do_task_command.call("warcry " + warcry, ["a bit of a rest"])
+
+      if res =~ /completed/
+        break
+      elsif res =~ /a bit of a rest/
+        fput "out"
+        rest_vocal_cords.call
+        break
+      end
+    end
+
+    waitrt?
+    fput "out"
+  else
+    error.call "task #{info["task"]} not yet implemented"
+  end
+}
+
+get_batter_weapon = proc {
+  locker = CharSettings["locker"]
+  weapon = CharSettings["batter-weapon"]
+  sheath = CharSettings["batter-sheath"]
+
+  if checkright =~ /#{weapon}/
+    next
+  end
+
+  if checkleft =~ /#{weapon}/
+    waitrt?
+    fput "swap"
+    next
+  end
+
+  fput "get my #{weapon}"
+  sleep 0.25
+
+  if checkright !~ /#{weapon}/ and checkleft !~ /#{weapon}/
+    if locker.nil? or not locker
+      error.call "failed to find #{weapon} and locker is not set"
+    end
+
+    print.call "your batter weapon is not on you so let's go get it"
+    print.call "you have 3 seconds to kill me"
+    sleep 3
+
+    visit_locker.call("get", weapon)
+  end
+
+  if checkright !~ /#{weapon}/ and checkleft !~ /#{weapon}/
+    error.call "failed to find #{weapon} in inventory or locker"
+  end
+
+  if checkleft =~ /#{weapon}/
+    waitrt?
+    fput "swap"
+    next
+  end
+
+  weapon
+}
+
+do_batter_thing = proc { |thing|
+  obj = nil
+  holding = false
+
+  if thing == "right" and checkright
+    obj = GameObj.right_hand
+    holding = true
+  end
+
+  if thing == "left" and checkleft
+    obj = GameObj.left_hand
+    holding = true
+  end
+
+  if obj.nil?
+    obj = GameObj.loot.find { |l| l.noun =~ /#{thing}/ or l.name =~ /#{thing}/ }
+  end
+
+  if obj.nil?
+    error.call "failed to find #{thing} to bash"
+  end
+
+  weapon = get_batter_weapon.call
+
+  print.call "bashing #{obj.name}, you have 3 seconds to kill me"
+  sleep 3
+
+  if holding
+    if GameObj.right_hand.id == obj.id
+      fput "swap"
+    end
+
+    fput "drop ##{obj.id}"
+  end
+
+  while true
+    waitrt?
+
+    if Spell["Surge of Strength"].known? and Spell["Surge of Strength"].affordable? and not Spell["Surge of Strength"].active?
+      fput "cman surge"
+      waitcastrt?
+    end
+
+    res = dothistimeout "batter ##{obj.id}", 3, /You bash at the|In a shower of splinters/
+    if res =~ /In a shower of splinters/
+      break
+    end
+  end
+}
+
+do_tackle = proc {
+  print.call "running tackle routine"
+  info = get_skill_info.call "tackle"
+
+  tackle = proc { |target|
+    while true
+      wait_until { checkstamina(15) }
+
+      while not checkstance("offensive")
+        fput "stance offensive"
+        sleep 0.25
+      end
+
+      while not standing?
+        fput "stand"
+        sleep 0.25
+      end
+
+      waitrt?
+
+      if target.class == GameObj
+        wait_until { target.status !~ /prone/i }
+      end
+
+      res = do_task_command.call("tackle #{target}", ["is lying on the ground", "dummy in motion"])
+
+      if res =~ /is lying on the ground/
+        fput "pull dummy"
+      elsif res =~ /dummy in motion/
+        fput "push dummy"
+      end
+
+      if res =~ /completed/
+        break
+      end
+
+      sleep 0.25
+    end
+  }
+
+  case info["task"]
+  when "defend"
+    print.call "defending against partner"
+
+    if CharSettings["partner-trade"]
+      trade_in.call "tackle"
+    else
+      error.call "not yet implemented"
+    end
+  when "partner"
+    print.call "tackling a partner"
+
+    if CharSettings["partner-trade"]
+      trade_in.call "tackle"
+    else
+      error.call "not yet implemented"
+    end
+  when "creatures"
+    print.call "doing field reps"
+    prepare_field.call
+    do_field.call("tackle %s", 15)
+    finish_field.call
+  when "dummies"
+    go2.call "warrior guild dummies"
+
+    fput "go dummies"
+    tackle.call("dummy")
+    fput "stand" until standing?
+    fput "out"
+  when "skilled masters"
+    go2.call "warrior guild masters"
+
+    npc = GameObj.npcs.first
+    dothistimeout "ask ##{npc.id} for training tackle", 3, /Let me demonstrate|Let me show you|Now I show you|How about I show you/
+
+    # get tackled and stand
+    while true
+      if reget.find { |l| l =~ /try on me|feints a lunge|circles around|you tackle me|Ready\?/ }
+        break
+      end
+
+      waitrt?
+      until checkstance("defensive")
+        fput "stance defensive"
+        sleep 0.25
+      end
+      fput "stand" if not standing?
+
+      sleep 0.25
+    end
+
+    # do the tackling
+    tackle.call(npc)
+    fput "out"
+  else
+    error.call "task #{info["task"]} not yet implemented"
+  end
+}
+
+do_batter = proc {
+  print.call "running batter routine"
+
+  sleep 1
+
+  # format is [rooms (or tag), plural name, single name]
+  types = {
+    "old boards" => ["warrior guild boards", "boards$", "board$"],
+    "branches" => ["warrior guild branches", "branches$", "branch$"],
+    "sheet metal" => [["3455", "4023", "8615"], "stack of sheet metal", "piece of sheet metal"],
+    "practice boxes" => ["warrior guild wooden boxes", "boxes", "cheap wooden box"],
+    "wooden stage door" => ["warrior guild wooden stage doors", "wood door", "wood door"],
+    "metal stage door" => ["warrior guild metal stage doors", "metal door", "metal door"],
+  }
+
+  info = get_skill_info.call "batter"
+  type = types[info["task"]]
+
+  if info["task"] == "creatures"
+    if CharSettings["batter-trade"]
+      trade_in.call("batter")
+      next
+    else
+      error.call "bashing creature boxes must be done manually"
+    end
+  end
+
+  if not type
+    error.call "failed to find type for #{info["task"]}"
+  end
+
+  weapon = get_batter_weapon.call
+
+  case info["task"]
+  when /#{types.keys.join("|")}/
+    if type[0].class == String
+      go2.call type[0]
+    else
+      room = Room.current.find_nearest(["3455", "4023", "8615"])
+      _, dist = Map.dijkstra(CharSettings["rest-room"])
+
+      if dist[room] > 10
+        error.call "room for your town is not yet implemented for batter sheet metal "
+      end
+
+      go2.call room
+    end
+
+    action = proc {
+      while not standing?
+        fput "stand"
+        sleep 0.25
+      end
+
+      if type[1] =~ /door/
+        if info["weapon"] == "shoulder"
+          clear_hands.call
+        end
+
+        fput "go #{type[1]}" unless checkroom =~ /Door/
+        next do_task_command.call "batter #{type[1]}", ['You need \d+ more hit']
+      end
+
+      if type[1] != "boxes"
+        stack = GameObj.loot.find { |l| l.name =~ /#{type[1]}/ }
+
+        if not stack
+          error.call "failed to find #{type[1]} to pull from"
+        end
+      end
+
+      single = GameObj.loot.find { |l| l.name =~ /\b#{type[2]}\b/ }
+      if not single
+        if type[1] == "boxes"
+          dothistimeout "get boxes", 3, /You pull/
+        else
+          dothistimeout "get ##{stack.id}", 3, /You pull/
+        end
+
+        single = GameObj.loot.find { |l| l.name =~ /#{type[2]}/ }
+      end
+
+      if not single
+        error.call "failed to find #{type[2]} to batter"
+      end
+
+      do_task_command.call "batter ##{single.id}", ['You need \d+ more hit']
+    }
+  end
+
+  while true
+    waitrt?
+
+    if Spell["Surge of Strength"].known? and Spell["Surge of Strength"].affordable? and not Spell["Surge of Strength"].active?
+      fput "cman surge"
+      waitcastrt?
+    end
+
+    res = action.call
+
+    if res.nil?
+      error.call "unknown response for #{info["task"]}: #{res}"
+    elsif res =~ /completed/
+      break
+    end
+  end
+
+  fput "put my #{weapon} in my #{CharSettings["batter-sheath"]}"
+  clear_hands.call
+  fput "out"
+}
+
+do_tricks = proc {
+  print.call "running tricks routine"
+
+  # set via the masters
+  master = false
+  master_location = nil
+
+  weapon = CharSettings["audience-weapon"]
+  sheath = CharSettings["audience-sheath"]
+
+  info = get_skill_info.call "tricks"
+  prepare = proc {
+    fput "get my #{weapon}"
+
+    if not master
+      go2.call CharSettings["audience-room"]
+    end
+  }
+  finish = proc {
+    fput "put my #{weapon} in my #{sheath}"
+    clear_hands.call
+  }
+  action = nil
+
+  clear_hands.call
+
+  do_trick = proc { |trick|
+    case trick
+    when /toss-n-slice|tslice/i
+      print.call "tossing and slicing"
+      prepare = proc {
+        if not master
+          get_snack.call "food", info["reps"]
+          go2.call CharSettings["audience-room"]
+        end
+        fput "get my #{weapon} from my #{sheath}"
+      }
+      action = proc {
+        if master
+          fput "get apple"
+        else
+          go2.call CharSettings["audience-room"]
+          get_snack.call "food"
+        end
+        do_task_command.call "wtrick tslice", nil
+      }
+    when /guzzle/i
+      print.call "guzzling some brew"
+
+      prepare = proc { get_snack.call "drink", info["reps"] }
+      action = proc {
+        go2.call CharSettings["audience-room"]
+        get_snack.call "drink"
+        do_task_command.call "wtrick guzzle", nil
+      }
+      finish = proc { }
+    when /weapon flip|wflip/i
+      print.call "flipping weapons"
+      action = proc { do_task_command.call "wtrick wflip", nil }
+    when /backflip/i
+      print.call "doing backflips"
+      action = proc { do_task_command.call "wtrick backflip", nil }
+      finish = proc { fput "put my #{weapon} in my #{sheath}" }
+    when /weapon hop|whop/i
+      print.call "hopping weapon"
+      action = proc { do_task_command.call "wtrick whop", nil }
+    when /spin attack|sattack/i
+      print.call "spin attack a creature"
+      prepare_field.call
+      do_field.call("wtrick sattack %s", 25)
+      finish_field.call
+      next
+    when /spin/i
+      print.call "spinning weapon"
+      prepare = proc {
+        fput "get my #{weapon}"
+        go2.call CharSettings["audience-room"]
+      }
+      action = proc { do_task_command.call "wtrick spin", nil }
+    when /drop-n-roll|roll/i
+      print.call "rolling around"
+      action = proc { do_task_command.call "wtrick roll", nil }
+    when /kick-n-sheath|ksheath/i
+      print.call "kick & sheath"
+      action = proc {
+        fput "get my #{weapon}"
+        do_task_command.call "wtrick ksheath", nil
+      }
+    when /twirl-n-sheath|tsheath/i
+      print.call "twirl & sheath"
+      action = proc {
+        fput "get my #{weapon}"
+        do_task_command.call "wtrick tsheath", nil
+      }
+    when /draw/i
+      print.call "draw weapon"
+      prepare = proc {
+        go2.call CharSettings["audience-room"]
+      }
+      action = proc {
+        res = do_task_command.call "wtrick draw #{weapon}", nil
+
+        if res !~ /pest/
+          fput "put my #{weapon} in my #{sheath}"
+        end
+        sleep 1
+        res
+      }
+    when /balanc/i
+      print.call "balancing weapon"
+
+      if master_location.nil?
+        master_location = "palm"
+      end
+
+      action = proc {
+        fput "get my #{weapon}"
+        res = do_task_command.call "wtrick balance #{master_location}", nil
+
+        if res !~ /You should wait/
+          fput "stop balancing"
+        end
+
+        res
+      }
+    when /juggl/i
+      print.call "juggling weapons"
+
+      if master_location == "two" or master_location.nil?
+        master_location = "2"
+      end
+
+      prepare = proc {
+        if not master
+          go2.call CharSettings["audience-room"]
+        end
+      }
+      action = proc {
+        res = do_task_command.call "wtrick juggle #{master_location}", ["but can't quite get the rhythm"]
+
+        if res =~ /but can't quite get the rhythm/
+          print.call 'sleeping 15 seconds so we don\'t cause too much noise'
+          sleep 15
+        elsif res !~ /pest/
+          fput "stop juggling"
+        end
+
+        res
+      }
+    when /initial/i
+      print.call "writing initials"
+      weapon = CharSettings["audience-weapon-small"]
+      sheath = CharSettings["audience-sheath-small"]
+
+      action = proc {
+        do_task_command.call "wtrick initial", nil
+      }
+    when /sheath catch|catchs/i
+      print.call "sheath catch"
+      action = proc {
+        do_task_command.call "wtrick catchs", nil
+      }
+    when /polish|prune|rake|scrub/i
+      do_path_task.call info["task"]
+      next
+    when /spit/i
+      if not master
+        print.call "spit on a creature"
+
+        prepare_field.call
+        do_field.call("wtrick spit %s shirt", 0)
+        finish_field.call
+        next
+      end
+
+      print.call "spitting on training dummy"
+      prepare = proc { }
+      action = proc {
+        do_task_command.call "wtrick spit dummy #{master_location}", nil
+      }
+      finish = proc { }
+    when /feint/i
+      if not master
+        print.call "feint a creature"
+        prepare_field.call
+        do_field.call("wtrick feint %s", 7)
+        finish_field.call
+        next
+      end
+
+      print.call "feint a master"
+      prepare = proc { }
+      action = proc {
+        do_task_command.call "wtrick feint ##{GameObj.npcs.first.id}"
+      }
+    when /haircut/i
+      if not master
+        print.call "haircut a creature"
+        prepare_field.call
+        do_field.call("wtrick haircut %s", 7)
+        finish_field.call
+        next
+      end
+
+      print.call "haircut training dummy"
+      action = proc {
+        do_task_command.call "wtrick haircut dummy", nil
+      }
+    when /skilled masters/i
+      go2.call "warrior guild masters"
+
+      master = true
+
+      npc = GameObj.npcs.first
+      dothistimeout "ask ##{npc.id} for training tricks", 3, /Let me demonstrate|Let me show you|Now I show you|How about I show you/
+
+      # check for task for 2 minutes
+      1200.times do
+        line = get?
+
+        if line =~ /places the handle of .* on (his|her) (palm|finger|foot|chin|nose)/i
+          master_location = $2
+        elsif line =~ /makes a wet gargling sound and spits .* (shirt|feet|foot|hand|face|eye)/
+          master_location = $1
+          if master_location =~ /foot/
+            master_location = "left foot"
+          elsif master_location =~ /hand/
+            master_location = "left hand"
+          elsif master_location =~ /eye/
+            master_location = "left eye"
+          end
+        elsif line =~ /but just with (two)/
+          master_location = $1
+        elsif line =~ /Type WTRICK (.*) to practice this trick\./
+          do_trick.call($1.to_s)
+          break
+        elsif line =~ /escorts you back/
+          next
+        end
+
+        sleep 0.10
+      end
+
+      fput "out"
+    else
+      error.call "task #{info["task"]} not yet implemented"
+    end
+
+    wait_pcs = proc {
+      pcs = GameObj.pcs.find_all { |pc| pc.status !~ /dead/ }
+      if pcs.nil? or pcs.length < 5
+        print.call "waiting for more pcs to show up"
+        wait_until { GameObj.pcs.find_all { |pc| pc.status !~ /dead/ }.length > 4 }
+      end
+    }
+
+    prepare.call
+
+    while res = action.call
+      waitrt?
+
+      if res.nil?
+        error.call "unknown response for #{info["task"]}: #{res}"
+      elsif res =~ /completed/
+        break
+      elsif res =~ /You should wait (\d+)/
+        print.call "waiting to perform trick"
+        sleep ($1.to_i + 1)
+      end
+
+      wait_pcs.call if not master
+    end
+
+    waitrt?
+    finish.call
+  }
+
+  do_trick.call(info["task"])
+}
+
+do_cheap = proc {
+  print.call "running subdue routine"
+  info = get_skill_info.call "subdue"
+
+  case info["task"]
+  when "creatures"
+    print.call "doing field reps"
+    prepare_field.call
+    do_field.call("subdue %s", 20)
+    finish_field.call
+  else
+    error.call "task #{info["task"]} not yet implemented"
+  end
+}
+
+do_lmas = proc {
+  print.call "running lock mastery routine"
+  info = get_skill_info.call "lmas"
+
+  case info["task"]
+  when "na"
+  else
+    error.call "task #{info["task"]} not yet implemented"
+  end
+}
+
+do_rgam = proc {
+  print.call "running rogue gambits routine"
+  info = get_skill_info.call "rgam"
+
+  case info["task"]
+  when "na"
+  else
+    error.call "task #{info["task"]} not yet implemented"
+  end
+}
+
+do_stunman = proc {
+  print.call "running stunman routine"
+  info = get_skill_info.call "stunman"
+
+  get_stunman_command = proc {
+    command = nil
+    done = false
+
+    action = proc { |server_string|
+      if done
+        next server_string
+      end
+
+      if server_string =~ /[^>]+>(\w+)<\/a>\s+/
+        if $1.to_s.downcase == "automatic"
+          done = true
+        else
+          command = $1.to_s.downcase
+        end
+        nil
+      elsif server_string =~ /(\w+)\s+/
+        if $1.to_s.downcase == "automatic"
+          done = true
+        else
+          command = $1.to_s.downcase
+        end
+        nil
+      elsif not server_string.nil? and not server_string.empty? and server_string !~ /\r\n||&gt;/
+        server_string
+      end
+    }
+
+    DownstreamHook.add "sguild_get_stunman", action
+    $_SERVER_.puts "#{$cmd_prefix}stunman\n"
+    start = Time.now.to_f
+    wait_until { done or Time.now.to_f - start >= 3.0 }
+    DownstreamHook.remove "sguild_get_stunman"
+
+    next command
+  }
+
+  case info["task"]
+  when "arrows"
+    print.call "doing arrows"
+    go2.call "rogue guild trainer"
+
+    npc = GameObj.npcs.first
+    res = dothistimeout "ask ##{npc.id} for training stunman", 60, /No points on these arrows/
+
+    if res.nil?
+      error.call "unknown stunman result"
+    end
+
+    print.call "running dodge loop"
+
+    last_cmd = nil
+    cmd = nil
+
+    fput "stance offensive"
+
+    loop do
+      while not standing?
+        sleep(0.25)
+        fput "stand"
+        waitrt?
+      end
+
+      loop do
+        cmd = ["lean left", "lean right", "duck", "jump"].sample
+        if last_cmd != cmd
+          break
+        end
+      end
+
+      last_cmd = cmd
+      res = dothistimeout cmd, 60, /You have to dodge|completed|repetition/
+      if res =~ /completed|repetition/
+        break
+      end
+      waitrt?
+    end
+
+    waitrt?
+    fput "out"
+  when "footpads"
+    print.call "lessons from footpads"
+    go2.call "rogue guild trainer"
+
+    command = nil
+    npc = GameObj.npcs.first
+    res = dothistimeout "ask ##{npc.id} for training stunman", 60, /show you how/
+    if res =~ /show you how ([^\s]+) is done right/
+      command = $1.to_s.downcase
+    else
+      error.call "unknown stunman result"
+    end
+
+    loop do
+      if not stunned?
+        fput "stance offensive"
+        fput "nod"
+      end
+
+      wait_until { stunned? }
+
+      res = do_task_command.call("stun #{command}", nil)
+      if res =~ /completed/
+        put "unstun"
+        break
+      end
+
+      if not checkstamina(15)
+        wait_for_stamina.call
+      end
+    end
+
+    wait_while { stunned? }
+    fput "out"
+  when "slaphands"
+    print.call "doing slaphands"
+    go2.call "rogue guild trainer"
+
+    npc = GameObj.npcs.first
+    res = dothistimeout "ask ##{npc.id} for training stunman", 60, /just put your hands on mine by choosing SLAP, DUCK or STOP/
+
+    if res.nil?
+      error.call "unknown stunman result"
+    end
+
+    print.call "running slaphands loop"
+
+    last_cmd = nil
+    cmd = nil
+
+    fput "stance offensive"
+
+    loop do
+      while not standing?
+        sleep(0.25)
+        fput "stand"
+        waitrt?
+      end
+
+      loop do
+        cmd = ["slap", "duck", "stop"].sample
+        if last_cmd != cmd
+          break
+        end
+      end
+
+      last_cmd = cmd
+      dothistimeout cmd, 60, /Roundtime:/
+      if reget.reverse[0..15].any? { |l| l =~ /completed|repetition/i }
+        break
+      end
+      waitrt?
+    end
+
+    waitrt?
+    fput "out"
+  when "stun"
+    print.call "doing self stunning"
+    clear_hands.call
+
+    command = get_stunman_command.call
+
+    loop do
+      if not stunned?
+        fput "stance offensive"
+        fput CharSettings["stun-command"]
+      end
+
+      res = do_task_command.call("stun #{command}", nil)
+      if res =~ /completed/
+        wait_while { stunned? }
+        waitrt?
+        break
+      elsif reget.find { |l| l =~ /You are already at/ }
+        wait_while { stunned? }
+        fput "stance offensive"
+      end
+
+      if not checkstamina(15)
+        go2.call CharSettings["rest-room"]
+        wait_for_stamina.call
+      end
+    end
+  when "sweep"
+    print.call "sweeping the courtyard"
+    do_path_task.call "sweep"
+  when "windows"
+    print.call "cleaning windows"
+    do_path_task.call "windows"
+  else
+    error.call "task #{info["task"]} not yet implemented"
+  end
+}
+
+do_subdue = proc {
+  print.call "running subdue routine"
+  info = get_skill_info.call "subdue"
+
+  case info["task"]
+  when "creatures"
+    print.call "doing field reps"
+    prepare_field.call
+    do_field.call("subdue %s", 20)
+    finish_field.call
+  else
+    error.call "task #{info["task"]} not yet implemented"
+  end
+}
+
+do_sweep = proc {
+  print.call "running sweep routine"
+  info = get_skill_info.call "sweep"
+
+  case info["task"]
+  when "na"
+  else
+    error.call "task #{info["task"]} not yet implemented"
+  end
+}
+
+start = proc { |skill|
+  if CharSettings["wounded"].call
+    rest.call
+  end
+
+  case skill
+  when "batter"
+    if CharSettings["batter-sheath"].to_s.length == 0
+      error.call "you didn't set a batter weapon sheath"
+    end
+    if CharSettings["batter-weapon"].to_s.length == 0
+      error.call "you didn't set a batter weapon"
+    end
+    do_batter.call
+  when "tackle"
+    do_tackle.call
+  when "berserk"
+    do_berserk.call
+  when "disarm"
+    do_disarm.call
+  when "tricks"
+    if CharSettings["audience-sheath"].to_s.length == 0
+      error.call "you didn't set an audience sheath"
+    end
+    if CharSettings["audience-weapon"].to_s.length == 0
+      error.call "you didn't set an audience weapon"
+    end
+    if CharSettings["audience-weapon-small"].to_s.length == 0
+      error.call "you didn't set a small audience weapon"
+    end
+    do_tricks.call
+  when "warcries"
+    do_warcries.call
+  when "cheap"
+    do_cheapshots.call
+  when "lmas"
+    do_lockmastery.call
+  when "rgam"
+    do_roguegambits.call
+  when "stunman"
+    do_stunman.call
+  when "subdue"
+    do_subdue.call
+  when "sweep"
+    do_sweep.call
+  end
+}
+
+partner_warcry = proc { |partner|
+  print.call "teaching warcries to #{partner}"
+  fput "warcry teach #{partner}"
+
+  start = Time.now.to_i
+  while true
+    line = get?
+
+    if line =~ /#{partner} whispers\, "All finished\. Thank you\!\"|#{partner} whispers\, \"I need to give my throat a rest\.\"/
+      break
+    elsif line =~ /#{partner} whispers\, "I need another lesson please\.\"/
+      start = Time.now.to_i
+      fput "warcry teach #{partner}"
+    elsif line =~ /#{partner} is busy concentrating on someone else\'s lessons at the moment\./
+      fput "whisper #{partner} You are currently already learning. Waiting 15 seconds and trying again."
+      sleep 15
+      next partner_warcry.call(partner)
+    elsif line =~ /You don\'t know enough about war cries to be much of a teacher to .*\./
+      fput "whisper #{partner} Sorry I am unable to teach you. You either have more skill ranks than I do or you have the same amount but are a higher level."
+      break
+    end
+
+    if Time.now.to_i - start > 300
+      print.call "timeout hit, aborting..."
+      break
+    end
+
+    sleep 0.10
+  end
+
+  print.call "done teaching warcries to #{partner}"
+}
+
+partner = proc {
+  loop {
+    print.call "waiting on partner request"
+    while line = get
+      if line =~ /(\w+) whispers, "Can you teach me (\w+)\?"/i
+        partner = $1.to_s
+        skill = $2.to_s
+        break
+      end
+    end
+
+    fput "whisper #{partner} I am ready."
+    case skill
+    when "warcries"
+      partner_warcry.call(partner)
+    else
+      error.call "partnering for #{skill} is not written yet"
+    end
+  }
+}
+
+help = proc {
+  help = <<-EOF
+SpiffyWar by SpiffyJr (theman@spiffyjr.me)
+
+Usage: 
+        ;#{script.name} <skill>                   run in normal mode using the skill provided
+        ;#{script.name} clear-hands               clears hands, including stowing any tools you have
+        ;#{script.name} clear-locker              lockers any items in use (like your batter maul)
+        ;#{script.name} help                      show this help message
+        ;#{script.name} list                      dump a list of the current settings
+       
+Skills\:
+        batter
+        berserk
+        disarm
+        tackle
+        tricks
+        warcries
+
+        cheap
+        lmas
+        rgam
+        stunman
+        subdue
+        sweep
+       
+Settings\: 
+        Change settings by using [setting] [value]. 
+        For example, ;#{script.name} audience-room 228.
+        
+        fried [on|off]                            if true will turn in even when fried (default: false)
+        
+        loop [on|off]                             whether or not to run continuously (default: false)
+        loop-mind [value]                         when loop mode is on stop running when mind reaches this value (default: 0)
+        loop-bounty [on|off]                      will stop looping if you can do a bounty, overrides loop-mind (default: false)
+        loop-no-reset [on|off]                    if enabled will exit instead of waiting on guild to reset (default: false) 
+        loop-no-vocal [on|off]                    if enabled will exit instead of waiting on vocal chords (default: false)
+        
+        travel [on|off]                           travel between guilds - uses speed2, so have it downloaded (default: false)
+        rest-room                                 room to rest in while waiting (default: 228)
+        rest-enter                                commands when entering the rest room (default: none)
+        rest-exit                                 commands when exiting the rest room (default: none)
+        rest-scripts                              scripts to run before resting (default: useherbs --buy-missing=on, sloot sell)
+        loot-script                               script used to loot after field reps (default: sloot)
+        
+        audience-room                             audience room to perform tricks in (default: 228)
+        audience-weapon                           weapon to use for audience reps (balance, draw, polish, etc)
+        audience-weapon-small                     weapon used for small audience reps (initials)
+        audience-sheath                           sheath to store weapon in after audience reps
+        audience-sheath-small                     sheath to store small weapon in after audience reps
+
+        batter-weapon                             weapon used to batter barriers
+        batter-sheath                             sheath that holds the batter weapon
+        batter-trade                              will trade in bashing critter boxes
+        locker                                    starting room to get locker contents
+        locker-in                                 directions to get to locker room (for rooms that aren't mapped)
+        locker-out                                directions to get out of locker room (for rooms that aren't mapped)
+        
+        field-prepare                             field prepare commands separated with comma (default: gird)
+        field-finish                              field finish commands separated with comma (default: store all)
+        field-room                                field room (;wander add <room> for boundaries)
+        field-scripts                             scripts to use while in the field hunting
+        field-targets                             targets accepted during field reps
+        
+        partner-trade                             will trade in partner tasks when you get them
+        partner-name                              name of the partner to do reps with
+        partner-room                              room your partner is parked in
+
+        stun-command                              the command to use to stun yourself
+
+        weapon-brawling                           your brawling weapon
+        weapon-polearm                            your polearm weapon
+        weapon-edged                              your edged weapon
+        weapon-sheath                             your weapon sheath for all the weapons above
+    EOF
+
+  respond help
+  exit
+}
+
+bools = ["loop", "batter-trade", "partner-trade", "travel", "loop-bounty", "loop-no-reset", "loop-no-vocal", "fried"]
+ints = ["loop-mind", "audience-room", "partner-room", "field-room", "rest-room"]
+array = ["field-prepare", "field-finish", "rest-scripts", "field-scripts", "field-targets", "locker-in", "locker-out"]
+procs = ["wounded"]
+
+if script.vars.empty?
+  help.call
+elsif script.vars[1] =~ /partner$/i
+  partner.call
+elsif script.vars[1] =~ /clear-hands/i
+  clear_hands.call
+elsif script.vars[1] =~ /clear-locker/i
+  clear_locker.call
+elsif script.vars[1] =~ /list/i
+  CharSettings.to_hash.sort.each { |key, value|
+    if bools.include? key
+      value = value ? "on" : "off"
+    elsif array.include? key
+      value = value.join(",")
+    elsif procs.include? key
+      next
+    end
+
+    print.call sprintf "%20s: %s", key, value
+  }
+elsif script.vars[1] =~ /^(fried|loop-no-reset|loop-no-vocal|loop-bounty|partner-room|partner-name|travel|field-prepare|field-finish|rest-scripts|field-scripts|field-room|field-targets|partner-trade|batter-trade|locker|locker-in|locker-out|batter-sheath|batter-weapon|audience-room|audience-weapon|audience-weapon-small|audience-sheath|audience-sheath-small|loop|loop-mind|rest-room|rest-exit|rest-enter|loot-script|weapon-sheath|weapon-polearm|weapon-brawling|weapon-edged|stun-command)$/i
+  key = $1
+  script.vars.shift
+  script.vars.shift
+  value = script.vars.join(" ")
+
+  if bools.include? key
+    value = value == "on" ? true : false
+  elsif ints.include? key
+    value = value.to_i
+  elsif array.include? key
+    value = value.split(",")
+  end
+
+  CharSettings[key] = value
+  print.call "#{key} set to #{value.inspect}"
+elsif script.vars[1] == "batter" and script.vars[2]
+  do_batter_thing.call script.vars[2]
+elsif script.vars[1] =~ /#{skill_short_to_long.keys.join("|")}/i
+  clear_hands.call
+
+  if CharSettings["loop"]
+    while true
+      if CharSettings["wounded"].call
+        rest.call
+      end
+
+      if CharSettings["loop-bounty"]
+        if not Script.exists?("sbounty") or not running?("sbounty")
+          $sbounty_can_do_bounty = false
+        end
+
+        if not Spell["Next Bounty"].active? and not $sbounty_can_do_bounty
+          print.call "exiting because a bounty is available"
+          break
+        end
+      end
+
+      if CharSettings["loop-mind"] > 0 and percentmind <= CharSettings["loop-mind"]
+        print.call "exiting because mind is below threshold"
+        break
+      end
+
+      start.call script.vars[1]
+      sleep 0.25
+    end
+  else
+    start.call script.vars[1]
+  end
+else
+  help.call
+end

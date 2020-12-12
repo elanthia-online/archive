@@ -1,0 +1,166 @@
+=begin
+
+So you don't make poohbear angry.
+
+Spirit costs code from no_spirit_death by Tgo01
+Wander proc from waggle by Tillmen
+Checking for evil people also from waggle.
+
+This script does not know if there are hidden or invisible people who might see you and make poohbear mad.
+
+This is in beta. 
+Author:Veni
+Version:0.2
+
+Changelog:  -Will now prioritize invisibility over hiding if at tables.
+			-Will now unhide if it hid you once you're safely above threshold
+			-Will pause waggle if it hides you
+=end
+
+add_up_spirit_costs = nil
+total_spirit_cost = 0
+all_done_checking = nil
+did_something = false
+initial_move = true
+paused_waggle = false
+paused_phaseorb = false
+peepcheck = nil
+roomcheck = nil
+
+add_up_spirit_costs = proc{
+	total_spirit_cost = 0
+	total_spirit_cost += 1 if Spell[9912].active? #Sign of Swords
+	total_spirit_cost += 1 if Spell[9913].active? #Sign of Shields
+	total_spirit_cost += 1 if Spell[9914].active? #Sign of Dissipation
+	total_spirit_cost += 3 if Spell[9916].active? #Sign of Madness
+}
+
+wander_rooms = Array.new
+wander = proc {
+	room = Room.current
+	next_room_options = room.wayto.keys
+	next_room = next_room_options.find_all { |r| ((room.timeto[r].class == Float && room.timeto[r] <= 3) or (room.timeto[r].class == Proc && room.timeto[r].call != nil && room.timeto[r].call <= 3)) and not wander_rooms.include?(r)}
+	if next_room.empty?
+		next_room = wander_rooms.find { |r| next_room_options.include?(r) }
+	else
+		next_room = next_room[rand(next_room.length)]
+	end
+	wander_rooms.delete(next_room)
+	wander_rooms.push(next_room)
+	way = room.wayto[next_room]
+	if way.class == String 
+		move(way)
+	else
+		way.call
+	end
+}
+
+loop{
+add_up_spirit_costs.call
+pause
+spiritleft = spirit - total_spirit_cost
+if maxspirit == 11
+	unsafe = 6
+elsif maxspirit == 10
+	unsafe = 5
+elsif maxspirit == 9
+	unsafe = 5
+elsif maxspirit == 8
+	unsafe = 4
+elsif maxspirit == 7
+	unsafe = 4
+else
+	unsafe = 4
+end
+
+
+
+if did_something == true and total_spirit_cost == 0
+	if hidden?
+		echo "I think we're safe now."
+		fput "unhide"
+		fput "sit"
+		unpause_script("waggle") if running?("waggle") and paused_waggle == true
+		unpause_script("phaseorb") if running?("phaseorb") and paused_phaseorb == true
+		
+	end
+
+	did_something = false
+end
+
+if spiritleft <= unsafe and total_spirit_cost > 0
+	#echo gonna make poohbear mad, gonna check if we're hidden	
+
+		if !invisible? and !hidden? and checkpcs
+			if (peepcheck =! checkpcs) or (roomcheck =! Room.current.id)
+						status_tags
+						evil_pcs = checkpcs
+						waitcastrt?
+						result = dothistimeout 'sign of recognition', 5, /^You (?:touch|scratch|rub|tap|point to) your (?:right|left) (?:eyebrow|nostril|earlobe|shoulder|cheek) with your (?:right|left) (?:pinky|forefinger|thumb|index finger)\.$/
+						unless result.nil?
+							while (line = get) and (line !~ /<prompt/)
+								if line =~ /<a.*?>([A-Z][a-z]+)<\/a> acknowledges your sign/
+									evil_pcs.delete($1)
+								end
+							end
+						end
+						status_tags
+						if evil_pcs.nil? or evil_pcs.empty?
+							echo "We're ok"
+							currentpeeps = checkpcs
+
+							wait_while { currentpeeps == checkpcs }
+			end						
+								
+							
+								
+						else
+							#echo "Danger Zone.  Signs active that would take you below safety threshold.  Checking time left.."
+							if (Spell[9912].active? and Spell[9912].timeleft < 1.15) or (Spell[9913].active? and Spell[9913].timeleft < 1.15) or (Spell[9914].active? and Spell[9914].timeleft < 1.15) or (Spell[9916].active? and Spell[9916].timeleft < 1.15)
+								echo "You're going to make poohbear mad.  Taking action."
+								if Spell[916].known? and Spell[916].affordable? and not Room.current.tags.include?('no-magic')
+									pause_script("waggle") if running?("waggle")
+									Spell[916].cast	
+									did_something = true
+									unpause_script("waggle") if running?("waggle")
+							
+								elsif checkroom =~ /table/i
+									fput "hide"
+									did_something = true
+									if running?("waggle")
+										paused_waggle = true
+									end
+									if running?("phaseorb")
+										paused_phaseorb = true
+										pause_script("phaseorb")
+									end
+									pause_script("waggle") if running?("waggle")
+								
+									#echo  unsafe
+									#echo  spiritleft
+									#echo  total_spirit_cost
+								else
+									echo "Moving!"
+									
+									fput "disband"
+									20.times {
+									break if (checkpcs.nil? or invisible?)
+									wander.call
+									}
+								
+								end
+							else
+								peepcheck = checkpcs
+								roomcheck = Room.current.id
+								pause "10s"
+
+							end
+						end
+		end
+end
+}							
+								
+							
+
+
+

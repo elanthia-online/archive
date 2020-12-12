@@ -1,0 +1,27 @@
+# Will run the script heal2 on anyone who private messages the word "heal" to you on lnet
+# author: Glaves
+# tags: heal, healbot, remote, heal2, lnet, healing
+# version: 1.0b
+
+me = 
+
+unless Script.exists?('Heal2')
+	do_client(";repository download Heal2.lic")
+	wait_while { running?('repository') }
+	do_client(";autostart add Heal2")
+	wait_while { running?('autostart') }
+	pause 0.5
+end
+
+while line = get
+    command_sender = $1
+      command = $2
+	        commandarray = command.split
+if line =~ /\[Private\]-GSIV:(.*): \"(.*)\"/
+      if commandarray.first =~ /(H|h)eal/
+        dothisscript = commandarray.last
+		  me = command_sender
+        Script.run("heal2", "#{me}")
+		end
+	end
+end

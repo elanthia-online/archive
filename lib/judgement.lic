@@ -1,0 +1,26 @@
+# Casts 1603 then 1635 if more than 3 mobs in the room
+#
+# ~Glaves
+
+
+def spells_1630(target = false)
+		 Spell[1630].known? && Spell[1630].affordable?
+			Spell[1630].cast
+			waitrt?
+			waitcastrt?
+end
+
+def spells_1603(target = false)
+		 Spell[1603].known? && Spell[1603].affordable?
+			Spell[1603].cast
+			waitrt?
+			waitcastrt?
+end
+
+
+	if GameObj.npcs.find_all{|npc| !['tiger', 'sloth', 'wolf', 'Leia'].include?(npc.noun)}.length >= 3
+		if mana?(40)
+			spells_1603
+			spells_1630
+		end
+	end

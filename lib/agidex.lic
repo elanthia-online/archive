@@ -1,0 +1,78 @@
+silence_me
+
+=begin
+Shows you your current AGIDEX bonus and how much you need for the next tier (and top tier)
+
+author: Ryjex
+=end
+
+dex = 0
+agi = 0
+
+	hook_proc = proc { |server_string|
+		if server_string =~ /^\s*Name\:|^\s*Gender\:|^\s*Normal \(Bonus\)|^\s*Strength \(STR\)\:|^\s*Constitution \(CON\)\:|^\s*Dexterity \(DEX\)\:|^\s*Agility \(AGI\)\:|^\s*Discipline \(DIS\)\:|^\s*Aura \(AUR\)\:|^\s*Logic \(LOG\)\:|^\s*Intuition \(INT\)\:|^\s*Wisdom \(WIS\)\:|^\s*Influence \(INF\)\:/
+			nil
+		elsif server_string =~ /^\s*Mana\:\s+\-?[0-9]+\s+Silver\:\s+([0-9]+)/
+			DownstreamHook.remove('check_agidex')
+			nil
+		else
+			server_string
+		end
+	}
+	clear
+	DownstreamHook.add('check_agidex', hook_proc)
+	put 'info'
+	while (line = get)
+		if line =~ /^\s*Mana\:\s+\-?[0-9]+\s+Silver\:\s+([0-9]+)/
+			break
+		elsif line =~ /Dexterity/
+			s = line.split('(')[-1]
+			s = s.gsub(")","")
+			dex = s.to_i
+		elsif line =~ /Agility/
+			s = line.split('(')[-1]
+			s = s.gsub(")","")
+			agi = s.to_i
+		end
+	end
+
+#ad = Stats.dex[1] + Stats.agi[1]
+ad = agi+dex
+
+tier = 0
+need = 113
+
+if ad >= 113
+	tier = 8
+	need = 0
+elsif ad >= 98
+	tier = 7
+	need = 113-ad
+elsif ad >= 83
+	tier = 6
+	need = 98-ad
+elsif ad >= 68
+	tier = 5
+	need = 83-ad
+elsif ad >= 53
+	tier = 4
+	need = 68-ad
+elsif ad >= 38
+	tier = 3
+	need = 53-ad
+elsif ad >= 23
+	tier = 2
+	need = 38-ad
+elsif ad >= 8
+	tier = 1
+	need = 23-ad
+else
+	tier = 0
+	need = 8-ad
+end
+
+echo "Your agidex BONUS is #{ad}"
+echo "You are at tier #{tier} of 8 of RT reduction"
+
+echo "You need #{need} more agidex BONUS to reach the next tier" if tier < 8
+echo "You need #{113-ad} more agidex BONUS to reach the max tier" if tier < 8

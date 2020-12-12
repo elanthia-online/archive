@@ -1,0 +1,12 @@
+target = script.vars[1]
+if Spell[203].affordable?
+  cast 203
+  noun = GameObj.right_hand.noun
+  fput "give #{noun} to #{target}"
+  accepted = matchtimeout 7, /has accepted your offer and is now holding a/
+  if !accepted
+    fput "cancel"
+    fput "put #{noun} in pit"
+  end
+end
+sleep 1

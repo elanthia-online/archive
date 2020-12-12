@@ -1,0 +1,2042 @@
+#  author: SpiffyJr
+#    name: SLoot
+#    tags: loot
+
+# changelog:
+#     2020.04.08 - s/puts/_respond
+#     2020.04.03 - hoarding updates
+#     2020.04.02 - hoarding updates
+#     2020.03.24 - fixed percent for locksmith pool
+#     2020.03.23 - slootbeta.ui is finished (Gtk3 only). Fixed some _drag issues.
+#     2020.03.21 - Disk looting updates.
+#     2020.03.20 - Fixed @@keep_values error.
+#     2020.03.18 - Some bug fixes.
+#     2020.03.15 - Start of GUI update. Adding pool support for all towns.
+#     2020.03.11 - Significant looting updates.
+#                  Will use LOOT ROOM if able, otherwise individual looting.
+#                  Looting boxes will now exclude items properly.
+#                  Disk improvements.
+#                  Moar hoarding fixes.
+#     2020.03.09 - Fixed selling gems that aren't hoarded to local gemshop for bounties.
+#     2020.03.05 - Hoarding fix from @FarFigNewGut. Added hoard get # <gem name>.
+#     2020.03.04 - FWI improvements.
+#     2020.03.03 - Bug fixes. Added version checking. Beginning of a beautiful friendship.
+
+version = '2020.04.08'
+
+if (GameSetting[:sloot_version] != version) || !File.exist?("#{$script_dir}/slootbeta.ui")
+  $sloot = nil
+  GameSetting[:sloot_version] = version
+
+  echo '-- new version detected; updating UI'
+  echo "-- you have 5 seconds to #{$lich_char}kill me"
+  sleep(5)
+  Script.run('repository', 'download slootbeta.ui')
+  echo '-- update complete; restart me'
+  exit
+end
+
+# convert old style tip to two separate settings
+if CharSetting[:sell_locksmith_pool_tip] =~ /(\d+)\s+percent/i
+  CharSetting[:sell_locksmith_pool_tip] = $1.to_i
+  CharSetting[:sell_locksmith_pool_tip_percent] = true
+else
+  CharSetting[:sell_locksmith_pool_tip] = CharSetting[:sell_locksmith_pool_tip].to_i
+end
+
+# check for initial load, reload, or update
+
+# Primary class, does all the work
+
+if $sloot.nil? or script.vars[1] == 'load' or CharSetting[:debug]
+  class SLootSetup < Gtk::Builder
+    @@loot_types = %w[box forageable gem herb lockpick potion reagent scroll skin treasure trinket wand]
+
+    # Setup categories. Each category has metadata for display as well as a list of settings.
+    # Ordering in the Dialog is done based on the order of the :settings hash.
+    @@categories = {
+      hoard: {
+        settings: {
+          hoard_enable: { default: false },
+          hoard_lockers: {
+            default: [],
+            load: proc do |store, setting|
+              store.clear
+              setting.each do |text|
+                iter = store.append
+                iter[0] = Room[text].id
+                iter[1] = Room[text].title.first
+                iter[2] = Room[text].location
+              end
+            end,
+            delete: proc do |store, selected, setting|
+              setting.delete(Room[selected.get_value(0)].id)
+              setting.uniq!.sort!
+            end,
+            set: proc do |store, text, setting|
+              if setting.include?(text)
+                next
+              elsif Room[text].nil?
+                next
+              end
+              setting.push(Room[text].id)
+              setting.uniq!.sort!
+            end
+          }
+        }
+      },
+      loot: {
+        settings: {
+          loot_types: { default: @@loot_types },
+          loot_exclude: {
+            default: ['black ora'],
+            load: proc do |store, setting|
+              store.clear
+              setting.each do |text|
+                iter = store.append
+                iter[0] = text
+              end
+            end,
+            delete: proc do |store, selected, setting|
+              setting.delete(selected.get_value(0))
+              setting.uniq!.sort!
+            end,
+            set: proc do |store, text, setting|
+              next if setting.include?(text)
+              setting.push(text)
+              setting.uniq!.sort!
+            end
+          },
+          loot_defensive: { default: false },
+          loot_ammo: { default: '' },
+          loot_gem_super_secret: { default: '' }
+        }
+      },
+      sell: {
+        settings: {
+          sell_loot_types: { default: @@loot_types },
+          sell_exclude: {
+            default: [],
+            load: proc do |store, setting|
+              store.clear
+              setting.each do |text|
+                iter = store.append
+                iter[0] = text
+              end
+            end,
+            delete: proc do |store, selected, setting|
+              setting.delete(selected.get_value(0))
+              setting.uniq!.sort!
+            end,
+            set: proc do |store, text, setting|
+              next if setting.include?(text)
+              setting.push(text)
+              setting.uniq!.sort!
+            end
+          },
+          sell_keep_scrolls: {
+            default: [],
+            load: proc do |store, setting|
+              store.clear
+              setting.each do |text|
+                iter = store.append
+                iter[0] = Spell[text].num
+                iter[1] = Spell[text].name
+              end
+            end,
+            delete: proc do |store, selected, setting|
+              setting.delete(Spell[selected.get_value(0)].num)
+              setting.uniq!.sort!
+            end,
+            set: proc do |store, text, setting|
+              if setting.include?(text)
+                next
+              elsif Spell[text].nil?
+                next
+              end
+              setting.push(Spell[text].num)
+              setting.uniq!.sort!
+            end
+          },
+          sell_appraise_types: { default: %w[treasure trinket] },
+          sell_appraise_gemshop: { default: 15_000 },
+          sell_appraise_pawnshop: { default: 35_000 },
+          sell_collectibles: { default: true },
+          sell_locksmith: { default: true },
+          sell_locksmith_pool: { default: true },
+          sell_locksmith_pool_tip: { default: 25 },
+          sell_locksmith_pool_tip_percent: { default: true },
+          sell_share_silvers: { default: false },
+          sell_fwi: { default: false },
+          sell_keep_silver: { default: 0 }
+        }
+      },
+      skin: {
+        settings: {
+          skin_enable: { default: false },
+          skin_kneel: { default: true },
+          skin_sheath: { default: '' },
+          skin_weapon: { default: '' }
+        }
+      },
+      internal: {
+        settings: {
+          silence: { default: false },
+          debug: { default: false },
+          hoard: { default: {} },
+          stats: { default: { skin: { attempts: 0, failures: 0 } } },
+          unskinnable: { default: [] }
+        }
+      }
+    }
+
+    def SLootSetup.get_category(key)
+      @@categories.each { |category, data| return category if not data[:settings][key].nil? }
+      return nil
+    end
+
+    def SLootSetup.get_setting(key)
+      cat = SLootSetup.get_category(key)
+      return nil if cat.nil?
+      @@categories[cat][:settings].each { |setting, data| return data if setting == key }
+      return nil
+    end
+
+    def initialize(script, settings)
+      super()
+
+      @script = script
+      @settings = settings
+
+      # set default values if they don't exist
+      @@categories.each do |id, data|
+        data[:settings].each { |key, value| @settings[key] = value[:default] if @settings[key].nil? }
+      end
+
+      # remove settings that doesn't exist
+      @settings.delete_if { |key, value| next SLootSetup.get_category(key).nil? }
+
+      # use a GTK Builder to setup all the basics of the window then expand on that base
+      if defined?(Gtk) and Gtk::Version::MAJOR == 3
+        Gtk.queue do
+          self.add_from_file("#{$script_dir}/slootbeta.ui")
+          self.load_settings
+
+          self['main'].keep_above = true
+
+          # connect signals after settings are loaded to a bunch of handlers don't trigger
+          self.connect_signals { |handler| method(handler) }
+        end
+      end
+    end
+
+    # This is connected to automatically during load_settings and syncs data back to CharSettings.
+    def on_update(obj)
+      Gtk.queue do
+        key = obj.builder_name.to_sym
+        setting = SLootSetup.get_setting(key)
+        return if setting.nil?
+        if obj.class == Gtk::CheckButton
+          @settings[key] = obj.active?
+        elsif obj.class == Gtk::Entry
+          @settings[key] = obj.text.strip
+        elsif obj.class == Gtk::SpinButton
+          # update from text entry
+          obj.update
+
+          # force int, we don't use floats anywhere
+          @settings[key] = obj.adjustment.value.to_i
+        end
+      end
+    end
+
+    def on_close_clicked()
+      self['main'].destroy
+    end
+
+    def on_destroy
+      Gtk.queue { @running = false }
+    end
+
+    # iterate all objects and for any that match a setting name directly we set the default
+    def load_settings()
+      Gtk.queue do
+        # load up the generic settings which are just matching by name of the widget
+        self.objects.each do |obj|
+          next if not obj.methods.include?(:builder_name)
+          key = obj.builder_name.to_sym
+          next if (setting = SLootSetup.get_setting(key)).nil?
+
+          # set the default value
+          if obj.class == Gtk::CheckButton
+            obj.active = @settings[key]
+            obj.signal_connect('toggled') { self.on_update(obj) }
+          elsif obj.class == Gtk::Entry
+            obj.text = @settings[key].strip
+            obj.signal_connect('changed') { self.on_update(obj) }
+          elsif obj.class == Gtk::SpinButton
+            # obj.value = @settings[key]
+            obj.value = @settings[key]
+            obj.adjustment.value = @settings[key]
+            obj.signal_connect('changed') { self.on_update(obj) }
+          elsif obj.class == Gtk::TreeView
+            if (store = self["#{key}_store"]).nil?
+              respond "** failed to find store for treeview #{key}"
+              next
+            elsif setting[:load].nil?
+              respond "** no :load defined #{key}"
+              next
+            end
+
+            setting[:load].call(store, @settings[key])
+
+            # setup the signals
+            if (add = self["#{key}_add"]).nil?
+              respond "** failed to find add for treeview #{key}"
+              next
+            elsif (delete = self["#{key}_delete"]).nil?
+              respond "** failed to find delete for treeview #{key}"
+              next
+            elsif (entry = self["#{key}_entry"]).nil?
+              respond "** failed to find entry for treeview #{key}"
+              next
+            end
+
+            add.signal_connect('clicked') do
+              if setting[:set].nil?
+                respond "** no :set defined for #{key}"
+                next
+              elsif entry.text.empty?
+                next
+              end
+              setting[:set].call(store, entry.text, @settings[key])
+              setting[:load].call(store, @settings[key])
+            end
+
+            delete.signal_connect('clicked') do
+              if setting[:delete].nil?
+                respond "** no :delete defined for #{key}"
+                next
+              elsif (selected = obj.selection.selected).nil?
+                next
+              end
+              setting[:delete].call(store, selected, @settings[key])
+              setting[:load].call(store, @settings[key])
+            end
+          end
+        end
+
+        # checkboxes for array storage with id's <setting>:<value>
+        # this is primarily used by the loot types
+        self.objects.each do |obj|
+          if not obj.methods.include?(:builder_name)
+            next
+          elsif obj.builder_name !~ /^([^:]+):(.*)$/i
+            next
+          elsif obj.class != Gtk::CheckButton
+            next
+          end
+          key = $1.to_sym
+          value = $2.to_s
+          next if (setting = SLootSetup.get_setting(key)).nil?
+          obj.active = @settings[key].include?(value)
+
+          # add in hook
+          obj.signal_connect('toggled') do
+            @settings[key].delete(value)
+            @settings[key].push(value)
+            @settings[key].uniq!.sort! if obj.active?
+          end
+        end
+      end
+    end
+
+    def start()
+      @running = true
+
+      Gtk.queue { self['main'].show_all }
+
+      wait_while { @running }
+    end
+
+    def list(catToList)
+      indent_size = 2
+      print_array =
+        proc do |key, value, indent|
+          _respond("#{' ' * indent_size * indent.to_i}#{key}:")
+          value.each { |entry| _respond("#{' ' * indent_size * (indent.to_i + 1)}#{value.index(entry) + 1}. #{entry}") }
+        end
+
+      print_value = proc { |key, value, indent| _respond("#{' ' * indent_size * indent.to_i}#{key}: #{value.to_s}") }
+
+      if catToList == 'all'
+        categories = %w[hoard loot sell skin]
+      else
+        categories = [catToList]
+      end
+
+      categories.each do |opt|
+        _respond("#{monsterbold_start}= #{opt.capitalize} =#{monsterbold_end}")
+        @@categories[opt.to_sym][:settings].each do |id, setting|
+          value = @settings[id]
+          value.class == Array ? print_array.call(id, value, 1) : print_value.call(id, value, 1)
+        end
+      end
+    end
+
+    def update_setting(key, value)
+      setting = SLootSetup.get_setting(key)
+      if setting.nil?
+        echo "** setting \"#{key}\" does not exist"
+        exit
+      end
+
+      action = nil
+
+      if value =~ /^([+-])(.*)$/
+        action = $1
+        value = $2.strip.downcase
+      end
+
+      if value == 'reset'
+        @settings.delete(key)
+        echo "-- reset #{key}"
+      elsif @settings[key].class == Array
+        if value =~ /\d/ and @settings[key][value.to_i]
+          @settings[key].delete_at(value.to_i)
+        else
+          @settings[key].delete(value)
+        end
+
+        if action == '-'
+          echo "-- \"#{value}\" removed from \"#{key}\""
+        else
+          @settings[key].push(value)
+          echo "-- \"#{value}\" added to \"#{key}\""
+        end
+
+        echo "-- \"#{key}\" is now \"#{@settings[key].join(', ')}\""
+      else
+        if @settings[key].class == FalseClass or @settings[key].class == TrueClass
+          value = (value =~ /^true|1|yes|on/) ? true : false
+        elsif @settings[key].class == Fixnum
+          value = value.to_i
+        end
+
+        echo "-- set \"#{key}\" to \"#{value}\""
+        @settings[key] = value
+      end
+    end
+  end
+
+  class SLoot
+    attr_accessor :version, :settings
+
+    @@ammo_bundles = []
+    @@ready_list = {}
+    @@sacks = {}
+    @@skinweapon = nil
+    @@skinsheath = nil
+
+    def SLoot.version
+      return '2020.03.11'
+    end
+
+    def SLoot.sacks
+      @@sacks
+    end
+
+    def initialize(settings)
+      @settings = settings
+
+      @disk = nil
+      @disk_full = false
+
+      self.info('checking for existence of disk')
+      15.times do
+        if (@disk = GameObj.loot.find { |l| l.name =~ /#{Char.name} disk$/ })
+          break
+        end
+        sleep 0.1
+      end
+
+      @disk ? self.info('disk found') : self.info('no disk found')
+
+      @prev_room = nil
+      @sacks_to_close = []
+      @sell_ignore = []
+      @stowed = []
+      @withdrawn_silver = 0
+
+      # setup ammosack if available
+      if not UserVars.ammosack.nil?
+        if quiver = GameObj.inv.find { |i| i.name =~ /\b#{UserVars.ammosack}\b/i }
+          @@sacks['ammo'] = quiver
+        end
+      end
+
+      waitrt?
+      res = dothistimeout('ready list', 3, /Your current settings are/)
+      self.error('failed to check READY list; restart me') if res !~ /Your current settings/
+
+      res = dothistimeout('stow list', 3, /You have the following/)
+      self.error('failed to check STOW list; restart me') if res !~ /You have the following/
+
+      $_SERVERBUFFER_.each do |line|
+        if line =~
+           %r{(shield|weapon|secondary weapon|ranged weapon): <d cmd="[^"]+">[^<]+<a exist="(\d+)" noun="[^"]+">[^<]+<\/a><\/d>}
+          @@ready_list[$1.to_s] = $2.to_s
+          nil
+        elsif line =~ /<a exist="([^"]+)" noun="[^"]+">[^(]+\(([a-z]+)\)/
+          @@sacks[$2] = GameObj.inv.find { |i| i.id == $1 }
+          @@sacks.delete($2) if not @@sacks[$2]
+        end
+      end
+
+      lootsack = self.find_sack('default')
+      self.error('set default stow container before using this script') if lootsack.nil?
+
+      self.debug("ready list: #{@@ready_list.inspect}")
+      self.debug("sacks: #{@@sacks.inspect}")
+    end
+
+    def debug(msg)
+      echo ">> #{msg}" if @settings[:debug]
+    end
+
+    def info(msg)
+      echo "-- #{msg}"
+    end
+
+    def error(msg)
+      echo "** #{msg}"
+      exit
+    end
+
+    def check_silver()
+      silvers = nil
+      action =
+        proc do |server_string|
+          if server_string !~ /^\s*Mana\:\s+\-?[0-9]+\s+Silver\:\s+([0-9]+)/
+            nil
+          elsif server_string =~ /^\s*Mana\:\s+\-?[0-9]+\s+Silver\:\s+([0-9]+)/
+            silvers = $1.to_i
+            DownstreamHook.remove('sloot_check_silvers')
+            nil
+          else
+            server_string
+          end
+        end
+
+      DownstreamHook.add('sloot_check_silvers', action)
+      $_SERVER_.puts "#{$cmd_prefix}info\n"
+      wait_until { silvers }
+      silvers
+    end
+
+    def cleanup()
+      self.fill_hands
+      @sacks_to_close.each { |sack| dothistimeout("close #{sack}", 2, /^You close|^That is already closed;\./) }
+      @sacks_to_close = []
+      @withdrawn_silver = 0
+    end
+
+    def fill_hands()
+      return if @stowed.length == 0
+
+      @stowed.each do |item|
+        id = item[0]
+        hand = item[1]
+
+        if id == @@ready_list['secondary weapon']
+          fput 'ready 2weapon'
+        elsif id == @@ready_list['shield']
+          fput 'ready shield'
+        elsif id == @@ready_list['ranged weapon']
+          fput 'ready ranged'
+        elsif id == @@ready_list['weapon']
+          fput 'ready weapon'
+        else
+          self.drag(item[0], item[1])
+        end
+      end
+      @stowed = []
+    end
+
+    def empty_hands()
+      if GameObj.right_hand.id
+        @stowed.push([GameObj.right_hand.id, 'right'])
+        self.drag('right', 'default')
+      end
+
+      if GameObj.left_hand.id
+        @stowed.push([GameObj.left_hand.id, 'left'])
+        self.drag('left', 'default')
+      end
+    end
+
+    def change_stance(stance)
+      return if Spell['Zealot'].active? or Spell['Frenzy'].active? or dead?
+      return if checkstance(stance.strip)
+      return if stance == 'defensive' and checkstance('guarded')
+
+      while (cur_stance = checkstance) != stance
+        res = dothistimeout("stance #{stance}", 2, /You are now|Roundtime|Wait|wait|Your rage causes you/)
+        if res =~ /Roundtime: (\d+)|wait (\d+)/i
+          sleep (($1 || $2).strip.to_f - 1)
+        elsif res =~ /Your rage causes you/
+          Spell['Frenzy'].putup
+          Spell['Frenzy'].timeleft = 30
+        elsif cur_stance == 'guarded' and stance == 'defensive'
+          break
+        end
+      end
+    end
+
+    def empty_hand(preferred_hand = 'right')
+      return if GameObj.left_hand.id.nil? or GameObj.right_hand.id.nil?
+
+      preferred_hand = 'right' if preferred_hand != 'left' and preferred_hand != 'right'
+
+      # TODO: this logic could probably be cleaned up if I ever care enough
+      case preferred_hand
+      when 'left'
+        if GameObj.left_hand.id == @@ready_list['secondary weapon']
+          @stowed.push([GameObj.left_hand.id, preferred_hand])
+          fput 'store 2weapon'
+        elsif GameObj.left_hand.id == @@ready_list['shield']
+          @stowed.push([GameObj.left_hand.id, preferred_hand])
+          fput 'store shield'
+        elsif GameObj.left_hand.id == @@ready_list['ranged weapon']
+          @stowed.push([GameObj.left_hand.id, preferred_hand])
+          fput 'store ranged'
+        end
+      else
+        if GameObj.right_hand.id == @@ready_list['weapon']
+          @stowed.push([GameObj.right_hand.id, preferred_hand])
+          fput 'store weapon'
+          if reget.reverse[0..10].any? { |l| l =~ /^You can't do that while the shaft/ }
+            fput "pull ##{GameObj.right_hand.id}"
+            waitrt?
+            return empty_hand(preferred_hand)
+          end
+        end
+      end
+
+      return if GameObj.left_hand.id.nil? or GameObj.right_hand.id.nil?
+
+      toStow = preferred_hand == 'left' ? GameObj.left_hand : GameObj.right_hand
+      self.drag(toStow, 'default') if toStow.id
+    end
+
+    def find_skin_weapon()
+      return false if @settings[:skin_weapon] == ''
+
+      return @@skinweapon if @@skinweapon
+
+      if not @@skinsheath
+        if @settings[:skin_sheath] != ''
+          @@skinsheath =
+            GameObj.inv.find do |i|
+              i.name =~ /\b#{@settings[:skin_sheath]}\b/ or i.noun =~ /\b#{@settings[:skin_sheath]}\b/
+            end
+        end
+
+        @@skinsheath = self.find_sack('default') if not @@skinsheath
+      end
+
+      if not @@skinsheath.contents
+        fput "look in ##{@@skinsheath.id}"
+
+        sleep 1 if not @@skinsheath.contents
+      end
+
+      @@skinweapon =
+        @@skinsheath.contents.find do |c|
+          c.name =~ /#{@settings[:skin_weapon]}/i or c.noun =~ /\b#{@settings[:skin_weapon]}\b/i
+        end
+
+      self.info("failed to find skinner: #{@settings[:skin_weapon]} in #{@@skinsheath}") if not @@skinweapon
+
+      @@skinweapon
+    end
+
+    def find_sack(type)
+      return @@sacks[type] if @@sacks[type]
+
+      type = 'default' if not @@sacks[type]
+
+      dothistimeout("look in ##{@@sacks[type].id}", 3, /^In the/) if not @@sacks[type].contents
+
+      @@sacks[type]
+    end
+
+    def refresh_ammo_bundles(force = false)
+      quiver = self.find_sack('ammo')
+
+      if quiver.nil?
+        self.info('failed to gather: you must specify an ammo container to use this feature')
+        return
+      end
+
+      bundles = quiver.contents.to_a.find_all { |loot| loot.type == 'ammo' and loot.name =~ /bundle/i }
+
+      @@ammo_bundles = [] if force
+
+      @@ammo_bundles.delete_if { |sb| not quiver.contents.find { |item| item.id == sb[:id] } }
+
+      bundles.each do |bundle|
+        next if @@ammo_bundles.find { |sb| sb[:id] == bundle.id }
+
+        details = get_ammo_bundle_details(bundle)
+        @@ammo_bundles.push(details)
+      end
+
+      return bundles
+    end
+
+    def bundle_ammo(obj)
+      bundle = nil
+
+      if obj.name =~ /(?:bolt|arrow)s$/i
+        details = self.get_ammo_bundle_details(obj)
+        bundle =
+          @@ammo_bundles.find do |b|
+            (b[:long] == details[:long] or b[:name] == details[:name]) and b[:strength] == details[:strength] and
+              b[:durability] == details[:durability] and
+              b[:extra] == details[:extra]
+          end
+
+        fput "put ##{details[:id]} in ##{bundle[:id]}" if bundle
+      else
+        details = self.get_ammo_details(obj)
+        bundle =
+          @@ammo_bundles.find { |b| (b[:long] == obj.name or b[:name] == obj.name) and b[:extra] == details[:extra] }
+
+        self.drag(obj, bundle[:id]) if bundle
+      end
+
+      self.drag(obj, 'ammo') if bundle.nil?
+    end
+
+    def drag(from, to)
+      fromId = 0
+      toId = 0
+
+      input_to_id =
+        proc do |input|
+          if input == 'hand'
+            self.empty_hand
+            next GameObj.right_hand.id.nil? ? 'right' : 'left'
+          elsif input == 'wear'
+            next input
+          elsif input == 'right'
+            if GameObj.right_hand.id
+              next "##{GameObj.right_hand.id}"
+            elsif from == 'right'
+              # from can't be left/right, or it'll throw a screamer
+              next nil
+            end
+            next input
+          elsif input == 'left'
+            if GameObj.left_hand.id
+              next "##{GameObj.left_hand.id}"
+            elsif from == 'left'
+              # from can't be left/right, or it'll throw a screamer
+              return nil
+            end
+            next input
+          elsif input == 'drop'
+            next input
+          elsif input.class == GameObj
+            next "##{input.id}"
+          elsif input.class == String
+            if input.to_i == 0
+              sack = self.find_sack(input)
+
+              if sack.nil?
+                self.info("failed to find sack for #{input}")
+                sack = self.find_sack('default')
+              end
+
+              next "##{sack.id}"
+            else
+              next "##{input.to_i}"
+            end
+          end
+
+          self.error("invalid param #{input.inspect} passed to drag")
+        end
+
+      self.debug("dragging #{from.inspect} to #{to.inspect}")
+
+      toId = input_to_id.call(to)
+      fromId = input_to_id.call(from)
+
+      if toId.nil? or fromId.nil?
+        self.info("there was an issue dragging #{toId} to #{fromId}")
+        return
+      end
+
+      self.debug("#{fromId.inspect} to #{toId.inspect}")
+
+      fput "_drag #{fromId} #{toId}"
+
+      lines = reget.reverse[0..5]
+
+      # was it closed?
+      if lines.any? { |l| l =~ /It's closed/i }
+        @sacks_to_close.push(toId)
+        fput "open #{toId}"
+        self.drag(from, to)
+      elsif lines.any? { |l| l =~ /^There appears to be an/i }
+        self.info('possibly an item you want to keep')
+        self.info('sleeping for 10 seconds: ;kill the script to hold onto it')
+        sleep(10)
+        self.drag(from, to)
+      end
+    end
+
+    def stow_it(obj, parent = nil)
+      # boxes get special handling
+      if obj.type == 'box' and @disk
+        self.wait_for_disk
+
+        # disk didn't make it; abort
+        if @disk.status =~ /gone/
+          self.drag(obj, 'box')
+          return
+        end
+
+        # try the disk now
+        self.drag(obj, @disk)
+
+        # welp, it's full, stow in normal container instead
+        if reget.reverse[0..25].any? { |l| l =~ /is full|won't fit in the/i }
+          @disk_full = true
+          self.drag(obj, 'box')
+        end
+
+        return
+      end
+
+      # we know some types don't work with LOOT (and you can't loot if it has a parent)
+      if parent or obj.type !~ /box|gem|herb|skin|wand|scroll|potion|reagent|trinket|lockpick|treasure|forageable|magic/
+        return drag(obj, obj.type)
+      end
+
+      # use built-in loot command
+      res =
+        dothistimeout("loot ##{obj.id}", 3, /^You pick up|does not appear to be|There is no loot|You search through/)
+      # failed, stow in default container
+      return drag(obj, obj.type) if res =~ /does not appear to be/
+
+      # still in hand for some reason (probably won't fit)
+      if [GameObj.right_hand.id, GameObj.left_hand.id].include?(obj.id)
+        self.info("item won't fit in your container")
+        self.info('sleeping for 3 seconds; kill me if you want to keep it')
+        sleep(3)
+        self.drag(obj, 'drop')
+      end
+    end
+
+    def loot_objs(objs, parent = nil)
+      # noop, I guess
+      return if objs.empty? or objs.nil?
+
+      # general rejections we will never loot and the in-game LOOT command will ignore
+      objs = objs.reject { |obj| obj.name =~ /\bsevered\b/i or obj.type.nil? or obj.id.to_i < 0 }
+
+      # try to shove boxes in it before continuing
+      # we reject any boxes that are successfully disked
+      objs =
+        objs.reject do |obj|
+          next false if obj.type != 'box'
+
+          self.stow_it(obj)
+          next true
+        end
+
+      # check for any exclusions, cursed gems, etc.
+      # if none exist, we can safely use LOOT ROOM and save some time
+      objs_to_loot =
+        objs.reject do |obj|
+          obj.type =~ /cursed/i or obj.type !~ /#{@settings[:loot_types].join('|')}/i or
+            obj.name =~ /elemental core|essence of fire/i or
+            (@settings[:loot_exclude].length > 0 and obj.name =~ /#{@settings[:loot_exclude].join('|')}/)
+          # loot exclusions
+        end
+
+      # nothing to do?
+      return if objs_to_loot.empty?
+
+      self.empty_hand
+
+      # check for LOOT ROOM/OBJECT support (LOOT ROOM skips weapons and armor)
+      if objs_to_loot.length === objs.reject { |obj| obj.type =~ /weapon|armor/i }.length
+        if parent == nil
+          dothistimeout 'loot room', 3, /With a discerning eye|There is no loot/
+        else
+          dothistimeout "loot ##{parent.id}", 3, /You search/
+        end
+        return
+      end
+
+      # Super Secret Gem Pouch support
+
+      if @settings[:loot_gem_super_secret].length > 0 and objs_to_loot.any? { |obj| obj.type =~ /gem/ }
+        if dothistimeout "gather #{@settings[:loot_gem_super_secret]}", 5, /^You gather|^You pick up/i
+          objs_to_loot = objs_to_loot.reject { |obj| obj.type =~ /gem/i }
+        end
+
+        return if objs_to_loot.empty?
+      end
+
+      # anything leftover (probably rare)
+      objs_to_loot.each { |obj| self.stow_it(obj, parent) }
+    end
+
+    def find_dead()
+      GameObj.npcs.find_all { |npc| npc.type !~ /passive|escort/ and npc.status == 'dead' }
+    end
+
+    def search(npcs)
+      npcs = npcs.to_a
+
+      return if npcs.empty?
+
+      npcs.each do |npc|
+        self.change_stance('defensive') if GameObj.targets.any? and @settings[:loot_defensive]
+
+        fput "loot ##{npc.id}"
+        30.times do
+          break if not GameObj.npcs.any? { |n| n.id == npc.id }
+          sleep 0.10
+        end
+      end
+
+      # if the setting is on always end in defensive
+      self.change_stance('defensive') if @settings[:loot_defensive]
+    end
+
+    def skin(npcs)
+      return if not @settings[:skin_enable]
+
+      npcs =
+        npcs.to_a.reject do |npc|
+          @settings[:unskinnable].index(npc.name) > -1 or npc.type =~ /bandit/ or npc.name =~ /Grimswarm/ or
+            npc.name =~ /^(?:ethereal|ghostly|unwordly)/
+        end
+
+      return if npcs.empty?
+
+      skinner = self.find_skin_weapon
+
+      self.drag(skinner, 'hand') if skinner
+
+      if GameObj.targets.empty?
+        while @settings[:skin_kneel] and not kneeling?
+          dothistimeout('kneel', 3, /^You kneel down\.$|^You move to|^You are already kneeling\.$/)
+        end
+      end
+
+      npcs.each do |npc|
+        res =
+          dothistimeout(
+            "skin ##{npc.id}#{skinner ? " with ##{skinner.id}" : ''}",
+            2,
+            /skinned|botched|already been|cannot skin|must be a member|can only skin|You are unable to break through|You break through the crust of the|You crack open a portion/
+          )
+        if res =~ /^You cannot skin/
+          @settings[:unskinnable].push(npc.name)
+        elsif res =~
+              /^(?:You break through the crust of the .+ and withdraw |You crack open a portion of the .+ and uncover )(.+)!/
+          self.drag($1.split.last, 'gem')
+        else
+          @settings[:stats][:skin][:attempts] = @settings[:stats][:skin][:attempts] + 1
+        end
+
+        @settings[:stats][:skin][:failures] = @settings[:stats][:skin][:failures] + 1 if res =~ /^You botched/i
+      end
+
+      while not standing?
+        stance = checkstance
+        self.change_stance('offensive') if GameObj.targets.empty?
+        dothistimeout('stand', 3, /You stand|You quickly roll/)
+        self.change_stance(stance) if checkstance != stance
+      end
+
+      self.drag(skinner, @@skinsheath) if skinner
+    end
+
+    def get_ammo_details(obj)
+      details = {}
+      done = false
+      start = Time.now.to_i
+      hook =
+        proc do |server_string|
+          if server_string =~ /scintillating ([^\s]+) light/
+            details[:extra] = "eblade:#{$1.to_s}"
+            nil
+          elsif server_string =~ /faint aura of holy light radiates/
+            details[:extra] = 'blessed'
+            nil
+          elsif server_string =~ /You see nothing unusual/
+            details[:extra] = 'plain'
+            nil
+          elsif server_string =~ /<prompt/ or Time.now.to_i - start > 3
+            done = true
+            server_string
+          elsif server_string =~ /\r\n/
+            nil
+          else
+            server_string
+          end
+        end
+
+      DownstreamHook.add('sloot_bundle_details', hook)
+      put "look at ##{obj.id}"
+      wait_until { done }
+      DownstreamHook.remove('sloot_bundle_details')
+
+      details
+    end
+
+    def get_ammo_bundle_details(bundle)
+      details = { id: bundle.id }
+      done = false
+      start = Time.now.to_i
+      hook =
+        proc do |server_string|
+          if server_string =~ /a strength of (\d+) and a durability of (\d+)\.\s+([^.]+)/
+            details[:strength] = $1.to_i
+            details[:durability] = $2.to_i
+
+            # handle flares
+            if server_string =~ /scintillating ([^\s]+) light/
+              details[:extra] = "eblade:#{$1.to_s}"
+            elsif server_string =~ /faint aura of holy light radiates/
+              details[:extra] = 'blessed'
+            else
+              details[:extra] = 'plain'
+            end
+
+            nil
+          elsif server_string =~ /Individual projectiles from this bundle will have a long of "an? ([^"]+)"/
+            details[:long] = $1
+            nil
+          elsif server_string =~ /Each individual projectile will be "an? ([^"]+)"\./
+            details[:name] = $1.to_s
+            done = true
+            nil
+          elsif server_string =~ /<prompt/
+            done = true
+            server_string
+          elsif server_string =~ /Individual projectiles from this bundle|\r\n/i
+            nil
+          else
+            server_string
+          end
+        end
+
+      DownstreamHook.add('sloot_ammo_details', hook)
+      put "look at ##{bundle.id}"
+      wait_until { done }
+      DownstreamHook.remove('sloot_ammo_details')
+
+      details
+    end
+
+    def gather_ammo(refresh = false)
+      if @settings[:loot_ammo].empty?
+        self.debug('tried to gather ammo but loot_ammo is blank')
+        return
+      end
+
+      self.bundle_ammo(GameObj.right_hand) if GameObj.right_hand.id
+
+      ammo =
+        GameObj.loot.to_a.find do |l|
+          l.type =~ /ammo/ #and
+          #l.name =~ /#{@settings[:loot_ammo]}/
+        end
+
+      return if ammo.nil?
+
+      self.refresh_ammo_bundles(refresh)
+
+      # gather ammo first
+      loop do
+        res =
+          dothistimeout "gather #{@settings[:loot_ammo]}",
+                        2,
+                        /out of your reach\.|You gather|You pick up|You may not combine/
+
+        if res =~ /You gather \d+ (.*) into a bundle on the ground/
+          if bundle = GameObj.loot.find { |l| l.name =~ /bundle.*#{$1.to_s}/ }
+            self.drag(bundle, 'right')
+            sleep 0.2 until GameObj.right_hand.id
+          end
+          break
+        elsif res =~ /You gather|You pick up/
+          sleep 0.2 until GameObj.right_hand.id
+          break
+        elsif res =~ /out of your/
+          sleep 3
+        end
+      end
+
+      self.bundle_ammo(GameObj.right_hand)
+
+      return self.gather_ammo(true) if GameObj.right_hand.id
+
+      self.gather_ammo
+    end
+
+    def stow_notes()
+      self.drag(GameObj.right_hand, 'default') if GameObj.right_hand.noun =~ /^(?:note|scrip|chit)$/
+      self.drag(GameObj.left_hand, 'default') if GameObj.left_hand.noun =~ /^(?:note|scrip|chit)$/
+    end
+
+    def go2(place)
+      fput 'unhide' if hidden?
+
+      # if we're going to a place we do it based on the sell_fwi settings
+
+      if place.class == String and @settings[:sell_fwi]
+        fwi_place = Room.list.find { |room| room.tags.include?(place) and self.is_fwi(room) }
+
+        place = fwi_place.id if fwi_place
+      end
+
+      if Room.current.id == place or Room.current.tags.include?(place)
+        return
+      elsif Room.current.id.nil?
+        if @settings[:debug]
+          self.info("unknown room location: hope you know what you're doing")
+        else
+          self.error('unknown room location')
+        end
+      end
+      Script.run('go2', "#{place} --disable-confirm", flags = { quiet: true })
+    end
+
+    def withdraw_silver(amount)
+      return if amount <= 0
+
+      self.go2('bank')
+
+      # TODO: handle not enough silver case
+      fput "withdraw #{amount} silvers"
+      @withdrawn_silver = @withdrawn_silver + amount
+    end
+
+    def loot_box(box)
+      unless trash =
+        (GameObj.room_desc.to_a + GameObj.loot.to_a).find do |obj|
+          obj.noun =~ /^(?:crate|barrel|wastebarrel|wastebasket|casket)$/
+        end ||
+          trash = (GameObj.room_desc.to_a + GameObj.loot.to_a).find { |obj| obj.noun == 'coffer' }
+        self.info('failed to find a trash container')
+      end
+
+      res = dothistimeout("open ##{box.id}", 3, /open|locked/)
+      return self.stow_it(box) if res =~ /locked/
+
+      if box.contents.nil?
+        dothistimeout("look in ##{box.id}", 3, /^In the/)
+        30.times do
+          break if not box.contents.nil?
+          sleep 0.10
+        end
+      end
+
+      if box.contents.nil?
+        self.info("failed to see contents of #{box.name}")
+        return
+      end
+
+      res = dothistimeout("get coins from ##{box.id}", 3, /^You gather the remaining|^Get what\?/)
+      self.info('unknown get coin result') if res !~ /^You gather the remaining/
+
+      waitrt?
+
+      self.loot_objs(box.contents, box) if box.contents.length > 0
+
+      if trash.nil?
+        self.drag(box, 'drop')
+      else
+        fput "put ##{box.id} in ##{trash.id}"
+        sleep(0.25)
+        if [GameObj.right_hand.id, GameObj.left_hand.id].include?(box.id)
+          fput "put ##{box.id} in ##{trash.id}"
+          sleep(0.25)
+        end
+      end
+
+      self.drag(box, 'drop') if [GameObj.right_hand.id, GameObj.left_hand.id].include?(box.id)
+    end
+
+    def open_box(box, activator)
+      self.drag(box, 'hand')
+
+      # properly handle phased items
+      if box.name =~ /shifting/i
+        right_hand = GameObj.right_hand.id == box.id
+        res = dothistimeout("drop ##{box.id}", 3, /flickers in and out of existence/)
+
+        if res =~ /flickers in and out of existence/
+          if right_hand
+            wait_while { GameObj.right_hand.id.nil? }
+            box = GameObj.right_hand
+          else
+            wait_while { GameObj.left_hand.id.nil? }
+            box = GameObj.left_hand
+          end
+        end
+      end
+
+      res = dothistimeout(activator, 3, /Gimme (\d+) silvers/)
+      if res =~ /Gimme (\d+) silvers/
+        box_cost = $1.to_i
+      else
+        box_cost = 0
+        self.info('unknown locksmith response: ' + res.to_s)
+      end
+
+      res = dothistimeout('pay', 3, /accepts|have enough/)
+      if res =~ /have enough/
+        self.drag(box, 'default')
+        self.withdraw_silver(8000 - self.check_silver)
+        self.go2('locksmith')
+
+        return self.open_box(box, activator)
+      end
+
+      self.loot_box(box)
+    end
+
+    def wait_for_disk()
+      return if not @disk
+
+      if @disk.status =~ /gone/ or not GameObj.loot.find { |l| l.name =~ /#{Char.name} disk$/ }
+        self.info('waiting for your disk to arrive')
+        50.times do
+          if (@disk = GameObj.loot.find { |l| l.name =~ /#{Char.name} disk$/ })
+            break
+          end
+          sleep 0.1
+        end
+      end
+
+      if @disk and @disk.status !~ /gone/ and @disk.contents.nil?
+        res = dothistimeout "look in ##{@disk.id}", 3, /^In the|^There is nothing|^That is closed/
+        if res =~ /^That is closed/
+          fput "open ##{@disk.id}"
+          fput "look in ##{@disk.id}"
+        end
+      end
+
+      return
+    end
+
+    def get_meta(key)
+      key = "meta:#{key}"
+      tag = Room.current.tags.find { |tag| tag =~ /#{key}/ }
+      return $1.to_s if tag =~ /^#{key}:(.*)$/
+      return nil
+    end
+
+    def sell_locksmith_pool(boxes)
+      # if we're here, assume we emptied out the disk some
+      @disk_full = false
+
+      self.withdraw_silver(8000 - self.check_silver) if boxes.length > 0
+
+      self.go2('locksmith pool')
+
+      meta = self.get_meta('boxpool:npc')
+      worker = GameObj.npcs.find { |npc| npc.name == meta }
+      if worker.nil?
+        self.info('failed to find the locksmith pool NPC')
+        self.info('update your map db; ;repository download-mapdb')
+        self.info('if the error persists then report this to SpiffyJr')
+        return
+      end
+
+      meta = self.get_meta('boxpool:table')
+      table = (GameObj.room_desc.to_a + GameObj.loot.to_a).find { |table| table.name == meta }
+      if table.nil?
+        self.info('failed to find the locksmith pool table')
+        self.info('update your map db; ;repository download-mapdb')
+        self.info('if the error persists then report this to SpiffyJr')
+      end
+
+      self.empty_hands
+
+      give_box =
+        proc do |box|
+          percent = ''
+          percent = ' PERCENT' if @settings[:sell_locksmith_pool_tip_percent]
+          fput "give ##{worker.id} #{@settings[:sell_locksmith_pool_tip]}#{percent}"
+          res =
+            dothistimeout "give ##{worker.id} #{@settings[:sell_locksmith_pool_tip]}#{percent}",
+                          3,
+                          /You don't have that much|takes your/
+          if res =~ /You don't have that much/
+            self.withdraw_silver(8000 - self.check_silver)
+            self.go2('locksmith pool')
+            give_box.call(box)
+          end
+        end
+
+      self.wait_for_disk
+
+      boxes.each do |box|
+        self.drag(box, 'hand')
+        give_box.call(box)
+        sleep(0.250)
+        self.drag(box, 'box') if [GameObj.right_hand.id, GameObj.left_hand.id].include?(box.id)
+      end
+
+      # retrieve (and loot) any boxes in the pool
+      loop do
+        res =
+          dothistimeout(
+            "ask ##{worker.id} for return",
+            3,
+            /We don't have any boxes ready for you|We don't seem to have that box|Alright, here's your/
+          )
+        # no more boxes left
+        break if res !~ /Alright, here's your/
+
+        box = nil
+        if GameObj.right_hand.type =~ /box/
+          box = GameObj.right_hand
+        elsif GameObj.left_hand.type =~ /box/
+          box = GameObj.left_hand
+        else
+          self.error('failed to find the box you were supposed to get; report this to SpiffyJr')
+        end
+
+        self.loot_box(box)
+
+        sleep(0.250)
+      end
+    end
+
+    def sell_locksmith(boxes)
+      # if we're here, assume we emptied out the disk some
+      @disk_full = false
+
+      boxes = boxes.reject { |box| box.type !~ /box/i }
+
+      return if boxes.empty?
+
+      silver = self.check_silver
+      need_silver = 8000 - silver
+
+      self.withdraw_silver(need_silver) if silver < 8000
+
+      self.go2('locksmith')
+      self.wait_for_disk
+
+      if table = (GameObj.room_desc.to_a + GameObj.loot.to_a).find { |obj| obj.noun =~ /^(?:table|counter)$/ }
+        dothistimeout("look on ##{table.id}", 3, /^On the/) if table.contents.nil?
+
+        if not table.contents.nil?
+          activator = nil
+          if table.contents.any? { |obj| obj.noun == 'bell' }
+            activator = 'ring bell'
+          elsif table.contents.any? { |obj| obj.noun == 'keys' }
+            activator = 'pull keys'
+          elsif table.contents.any? { |obj| obj.noun == 'chime' } or GameObj.loot.any? { |obj| obj.noun == 'chime' }
+            activator = 'ring chime'
+          end
+
+          if activator
+            self.empty_hands
+            boxes.each { |box| self.open_box(box, activator) }
+
+            self.drag(GameObj.right_hand, 'drop') if GameObj.right_hand.type =~ /box/
+
+            self.drag(GameObj.left_hand, 'drop') if GameObj.left_hand.type =~ /box/
+          else
+            self.error('failed to find a bell, keys, or chime on the table')
+          end
+        else
+          self.error('failed to find table contents')
+        end
+      else
+        self.error('failed to find a table')
+      end
+    end
+
+    def get_closest_locker()
+      self.error('hoarding is enabled but no lockers are set') if @settings[:hoard_lockers].empty?
+
+      room = Room.current.find_nearest(@settings[:hoard_lockers])
+    end
+
+    def get_locker()
+      locker = (GameObj.loot.to_a + GameObj.room_desc.to_a).find { |obj| obj.noun =~ /^(?:chest|locker)$/i }
+
+      self.error('failed to find jar storage') if not locker
+
+      if locker.contents.nil?
+        dothistimeout("look in ##{locker.id}", 3, /^In the|^There is nothing/)
+        30.times do
+          break if not locker.contents.nil?
+          sleep 0.10
+        end
+      end
+
+      self.error('failed to get locker contents') if locker.contents.nil?
+
+      locker
+    end
+
+    def go2_locker()
+      return if XMLData.room_title =~ /locker booth/i
+
+      self.go2(self.get_closest_locker)
+
+      if way_in = (GameObj.loot.to_a + GameObj.room_desc.to_a).find { |obj| obj.noun =~ /^(?:opening|curtain)$/ }
+        current = Room.current.id
+        move "go #{way_in.noun}"
+        wait_while { current == Room.current.id }
+      else
+        self.error('failed to find locker entrance')
+      end
+    end
+
+    def leave_locker()
+      return if XMLData.room_title !~ /locker booth/i
+
+      if way_out = (GameObj.loot.to_a + GameObj.room_desc.to_a).find { |obj| obj.noun =~ /^(?:opening|curtain)$/ }
+        current = Room.current.id
+        move "go #{way_out.noun}"
+        wait_while { current == Room.current.id }
+      else
+        self.error('failed to find locker entrance')
+      end
+    end
+
+    def open_locker()
+      # todo: get open line
+      fput 'open locker'
+      sleep(1)
+    end
+
+    def close_locker()
+      # todo: get close line
+      fput 'close locker'
+      sleep(1)
+    end
+
+    def hoard_normalize_gem(gem_name)
+      gem_name.gsub(
+        # strip out containing and some prefixes
+        /^containing |large |medium |small |tiny |some |pieces? of |shard of /,
+        ''
+      ).gsub(/ies$/, 'y').gsub(/xes$/, 'x').gsub(/zes$/, 'z').gsub(/es$/, 'e').gsub(/s$/, '') # remove pluarl
+    end
+
+    def hoard_index()
+      self.go2_locker
+      self.open_locker
+
+      empty_count = 0
+      jars = []
+
+      locker = self.get_locker
+      locker.contents.find_all { |obj| obj.noun =~ /^(?:jar|bottle|beaker)$/i }.each do |jar|
+        if jar.after_name.nil?
+          empty_count += 1
+        else
+          res = dothistimeout("look in ##{jar.id} from ##{locker.id}", 3, /^Inside .*? you see [0-9]+ portion/)
+          if res =~ /^Inside .*? you see ([0-9]+) portion/
+            jars.push(
+              { count: $1.to_i, gem: self.hoard_normalize_gem(jar.after_name), full: res.include?('It is full') }
+            )
+          end
+        end
+      end
+
+      @settings[:hoard] = {} if not @settings[:hoard]
+
+      @settings[:hoard][self.get_closest_locker] = { empty: empty_count, jars: jars }
+
+      self.close_locker
+    end
+
+    def hoard_get(gem, count)
+      roomId = self.get_closest_locker
+      self.hoard_index if not @settings[:hoard][roomId]
+
+      # do we have gems in the locker?
+      jars = @settings[:hoard][self.get_closest_locker][:jars]
+      jar_data = jars.find { |jar| jar[:gem] == gem }
+
+      if not jar_data or jar_data[:count] < count
+        self.info("tried to get #{count} #{gem} but you didn't have enough")
+        return
+      end
+
+      self.go2_locker
+      self.open_locker
+
+      locker = self.get_locker
+      jar =
+        locker.contents.find do |obj|
+          obj.noun =~ /^(?:jar|bottle|beaker)$/i and gem == self.hoard_normalize_gem(obj.after_name)
+        end
+
+      if jar
+        fput "get ##{jar.id} from ##{locker.id}"
+
+        count.times do
+          fput "shake ##{jar.id}"
+          jar_data[:count] -= 1
+          jar_data[:full] = false
+          fput 'stow left gem'
+        end
+
+        fput "put ##{jar.id} in locker"
+
+        if jar_data[:count] == 0
+          jars.delete_if { |jar| jar[:gem] == jar_data[:gem] }
+        end
+      end
+
+      self.close_locker
+      self.leave_locker
+    end
+
+    def hoard_store()
+      roomId = self.get_closest_locker
+      self.hoard_index if not @settings[:hoard][roomId]
+
+      lootsack = self.find_sack('gem')
+      data = @settings[:hoard][roomId]
+
+      jars_available =
+        data[:jars].find_all do |jar|
+          lootsack.contents.any? { |obj| obj.type =~ /gem/ and jar[:gem] == self.hoard_normalize_gem(obj.name) }
+        end
+
+      gems_to_store =
+        lootsack.contents.find_all do |obj|
+          obj.type =~ /gem/ and not jars_available.any? { |jar| jar[:gem] == self.hoard_normalize_gem(obj.name) }
+        end.collect { |gem| self.hoard_normalize_gem(gem.name) }.uniq
+
+      jars_to_fill = jars_available.delete_if { |jar| jar[:full] }
+
+      return if jars_to_fill.empty? and (gems_to_store.empty? or data[:count] == 0)
+
+      self.go2_locker
+      self.open_locker
+
+      # proc to handle dragging gem
+      drag_gem =
+        proc do |gem, jar, jar_data|
+          res =
+            dothistimeout(
+              "_drag ##{gem.id} ##{jar.id}",
+              3,
+              /^You (?:add|put)|is full|does not appear to be a suitable container for/
+            )
+          if res =~ /^You put/
+            jar_data[:count] += 1
+          elsif res =~ /^You add .* filling it/
+            jar_data[:count] += 1
+            jar_data[:full] = true
+            next
+          elsif res =~ /^You add/
+            jar_data[:count] += 1
+          elsif res =~ /is full/
+            jar_data[:full] = true
+            self.drag(gem, 'default')
+            next
+          elsif res =~ /does not appear to be a suitable container for/
+            self.drag(gem, 'default')
+            next
+          end
+        end
+
+      jars_to_fill.each do |jar_data|
+        locker = self.get_locker
+        jar =
+          locker.contents.find do |obj|
+            obj.noun =~ /^(?:jar|bottle|beaker)$/i and jar_data[:gem] == self.hoard_normalize_gem(obj.after_name)
+          end
+
+        # this shouldn't happen
+        self.error("failed to find jar for #{jar_data[:gem]} - this shouldn't happen!") if not jar
+
+        fput "get ##{jar.id} from ##{locker.id}"
+
+        # stash each of the matching gems until full
+        lootsack.contents.find_all do |obj|
+          obj.type =~ /gem/ and jar_data[:gem] == self.hoard_normalize_gem(obj.name)
+        end.each do |gem|
+          drag_gem.call(gem, jar, jar_data)
+          break if jar_data[:full]
+        end
+
+        fput "put ##{jar.id} in locker"
+      end
+
+      # store new gems if we have some empty containers
+
+      if data[:empty] > 0
+        gems_to_store.each do |gem_name|
+          locker = self.get_locker
+          jar = locker.contents.find { |obj| obj.noun =~ /^(?:jar|bottle|beaker)$/i and obj.after_name.nil? }
+
+          # this shouldn't happen
+          self.error("failed to find empty jar for #{gem_name}") if not jar
+
+          fput "get ##{jar.id} from ##{locker.id}"
+
+          jar_data = { gem: gem_name, count: 0 }
+
+          # stash each of the matching gems until full
+          lootsack.contents.find_all do |obj|
+            obj.type =~ /gem/ and gem_name == self.hoard_normalize_gem(obj.name)
+          end.each { |gem| drag_gem.call(gem, jar, jar_data) }
+
+          data[:empty] -= 1
+          data[:jars].push(jar_data)
+
+          fput "put ##{jar.id} in locker"
+        end
+      end
+
+      self.close_locker
+      self.leave_locker
+    end
+
+    def find_boxes()
+      self.wait_for_disk
+      boxes = self.find_sack('box').contents.find_all { |i| i.type =~ /box/ }
+      boxes += @disk.contents.to_a.find_all { |obj| obj.type =~ /box/ } if @disk
+      return boxes
+    end
+
+    def sell_collectibles()
+      lootsack = self.find_sack('default')
+      cols = lootsack.contents.find_all { |l| l.type =~ /collectible/ }
+
+      return if cols.empty?
+
+      self.go2('collectibles')
+
+      cols.each do |c|
+        self.drag(c, 'hand')
+        dothistimeout "deposit ##{c.id}", 3, /You hand your/
+      end
+    end
+
+    def is_fwi(room)
+      !!(room.location =~ /Four Winds|Mist Harbor|Western Harbor/)
+    end
+
+    def sell_bounty()
+      # do bounty selling first in original town
+
+      if bounty? =~
+         /You have been tasked to retrieve (\d+) (.*) of at least \w+ quality for \w+ (?:in|on|near) (?:(.*) (?:under|near|between) )?([^.]+)\.  You can SKIN them off the corpse of an? (.*) or purchase/
+        count = $1.to_i
+        skin = $2
+        realm = $3.nil? ? $4 : $3
+
+        furrier = Room.list.find { |r| r.tags.include?('furrier') and r.location =~ /#{realm}/i }
+        self.error('failed to find the furrier to turn into; send this to SpiffyJr') if not furrier
+
+        loot = self.find_sack('skin').contents.find_all { |l| l.sellable == 'furrier' and skin =~ /#{l.name}/ }
+        if not loot.empty?
+          self.go2(furrier)
+          loot.each do |l|
+            self.drag(l, 'hand')
+            fput "sell ##{l.id}"
+          end
+        end
+      elsif bounty? =~
+            /The gem dealer in ([^,]+), [^,]+, has received orders from multiple customers requesting (?:an?|some) ([^.]+)\.  You have been tasked to retrieve (\d+) of them\./
+        realm = $1
+        gem = self.hoard_normalize_gem($2)
+        gems_needed = $3.to_i
+        gems_needed -=
+          self.find_sack('gem').contents.to_a.find_all { |l| gem == self.hoard_normalize_gem(l.name) }.length
+
+        gemshop = Room.list.find { |r| r.tags.include?('gemshop') and r.location =~ /#{realm}/i }
+        self.error('failed to find the gemshop to turn into; send this to SpiffyJr') if not gemshop
+
+        gems_on_hand = self.find_sack('gem').contents.to_a.find_all { |l| gem == self.hoard_normalize_gem(l.name) }
+
+        # failed to find FWI locker, use closest instead
+
+        # raid stockpile if we need to
+        if gems_on_hand.length < gems_needed and @settings[:hoard_enable]
+          has_fwi_locker = false
+          if @settings[:sell_fwi]
+            @settings[:hoard_lockers].each do |locker|
+              room = Room[locker]
+              if room.id != 0 and self.is_fwi(room)
+                self.go2(room.id)
+                has_fwi_locker = true
+                break
+              end
+            end
+          end
+
+          self.go2(gemshop) if not has_fwi_locker
+
+          jar_data = @settings[:hoard][self.get_closest_locker][:jars].find { |jar| jar[:gem] == gem }
+
+          self.hoard_get(gem, gems_needed) if gems_needed > 0 and jar_data and jar_data[:count] >= gems_needed
+        end
+
+        gems_on_hand = self.find_sack('gem').contents.to_a.find_all { |l| gem == self.hoard_normalize_gem(l.name) }
+        if gems_on_hand.length >= 0
+          self.go2(gemshop)
+          gems_on_hand.each do |l|
+            self.drag(l, 'hand')
+            fput "sell ##{l.id}"
+          end
+        end
+      end
+    end
+
+    def sell()
+      boxes = self.find_boxes
+
+      fput 'unhide' if hidden?
+
+      self.empty_hands
+
+      # check for bounties
+      self.sell_bounty
+
+      starting_silver = self.check_silver
+
+      if @settings[:sell_locksmith_pool] and boxes.length > 0
+        self.sell_locksmith_pool(boxes)
+
+        # refresh the boxes
+        boxes = self.find_boxes
+      end
+
+      self.sell_locksmith(boxes) if @settings[:sell_locksmith] and boxes.length > 0
+
+      self.sell_collectibles if @settings[:sell_collectibles]
+
+      self.hoard_store if @settings[:hoard_enable]
+
+      lootsack = self.find_sack('default')
+      get_loot =
+        proc do |location|
+          lootsack.contents.find_all { |obj| obj.sellable =~ /^#{location}/i }.reject do |obj|
+            @sell_ignore.index(obj.id) or
+              (@settings[:sell_exclude].length > 0 and obj.name =~ /#{@settings[:sell_exclude].join('|')}/) or
+              not @settings[:sell_loot_types].any? { |loot_type| obj.type =~ /#{loot_type}/ }
+          end
+        end
+
+      # do the primary selling at each place
+      %w[furrier gemshop consignment pawnshop].each do |location|
+        loot = get_loot.call(location)
+
+        next if loot.empty?
+
+        self.go2(location)
+
+        # sell bulk shitter items
+
+        # refreshes sellable list
+
+        if location =~ /furrier|gemshop/
+          self.drag(lootsack, 'hand') if [checkleft, checkright].index(lootsack.noun).nil?
+
+          dothistimeout("sell ##{lootsack.id}", 3, /inspects the contents carefully/)
+
+          self.drag(lootsack, 'wear') if not [checkleft, checkright].index(lootsack.noun).nil?
+
+          self.stow_notes
+
+          loot = get_loot.call(location)
+
+          next if loot.empty?
+        end
+
+        # sanitycheck
+        self.drag(lootsack, 'wear') if not [checkleft, checkright].index(lootsack.noun).nil?
+
+        # individual items time (appraisals)
+        loot.each do |obj|
+          if obj.type =~ /scroll/ and @settings[:sell_keep_scrolls].length > 0
+            res = dothistimeout "read ##{obj.id}", 3, /^On the/
+            if res.nil?
+              @sell_ignore.push(obj.id)
+              next
+            end
+
+            spell_list = []
+            $_SERVERBUFFER_.reverse[0..25].each do |line|
+              if line =~ /noun="([0-9]+)"/
+                spell_list.push($1.to_s)
+              elsif line =~ /On the <a exist=\"[^"]+\"/
+                break
+              end
+            end
+
+            if (@settings[:sell_keep_scrolls] & spell_list).length > 0
+              @sell_ignore.push(obj.id)
+              next
+            end
+          end
+
+          self.drag(obj, 'hand')
+
+          if obj.type =~ /#{@settings[:sell_appraise_types].join('|')}/
+            res =
+              dothistimeout(
+                "appraise ##{obj.id}",
+                3,
+                /[0-9,]+ (?:silver|Not my line, really|for it if you want to sell|for this if you'd like)|I'm not buying anything this valuable today|not quite my field|only deal in gems and jewelry|There is nothing of value to me|Trying to pull a fast one on old Hortemeyer, are you\?|Can't say I'm interested|That's basically worthless here|no use for that/
+              )
+
+            denied = /Not my line, really|not quite my field|only deal in gems and jewelry|There is nothing of value to me|Trying to pull a fast one on old Hortemeyer, are you\?|no use for that/
+            accepted = /([0-9,]+) (?:silver|for it if you want to sell|for this if you'd like)/
+
+            value = 99_999_999
+            if location == 'gemshop'
+              value = @settings[:sell_appraise_gemshop]
+            elsif location == 'pawnshop'
+              value = @settings[:sell_appraise_pawnshop]
+            else
+              self.info("appraise setting not available for #{location}; report this to SpiffyJr")
+            end
+
+            if (res.nil? or (res =~ denied) or (res =~ accepted and $1.to_i >= value))
+              self.debug('unknown response from appraisal!') if res.nil?
+
+              @sell_ignore.push(obj.id)
+              self.drag(obj, 'default')
+              next
+            end
+          end
+
+          res =
+            dothistimeout(
+              "sell ##{obj.id}",
+              3,
+              /(?:pays|hands) you [0-9]+ silver|not quite my field|only deal in gems and jewelry|no use for that|Where do you find this junk|That's basically worthless here/
+            )
+          @sell_ignore.push(obj.id) if res =~ /no use for that|That's basically worthless here/
+
+          self.stow_notes
+
+          self.drag(obj, 'default') if (GameObj.right_hand.id == obj.id) or (GameObj.left_hand.id == obj.id)
+
+          # assume disk is no longer full
+          @disk_full = false
+        end
+      end
+
+      ending_silver = self.check_silver
+      profit = ending_silver - starting_silver - @withdrawn_silver
+      keep_silvers = @settings[:sell_keep_silvers].to_i
+
+      if (ending_silver > 0 and keep_silvers == 0 or (keep_silvers > 0 and ending_silver != keep_silvers))
+        self.go2('bank')
+
+        fput 'share all' if @settings[:sell_share_silvers] and ending_silver > 1
+
+        fput 'deposit all'
+
+        fput "withdraw #{keep_silvers}" if keep_silvers > 0
+
+        if profit < 0
+          self.info("Your loss was #{profit} silvers.")
+        elsif profit > 0
+          self.info("Your profit was #{profit} silvers.")
+        end
+      else
+        self.info("That wasn't very useful.")
+      end
+    end
+  end
+
+  $sloot = SLoot.new(CharSetting.to_hash)
+end
+
+# most common use-case, running to loot
+
+if script.vars[1].nil?
+  script.silent = true if CharSetting[:silence]
+
+  npcs = $sloot.find_dead
+
+  if npcs.length > 0
+    $sloot.skin(npcs)
+    $sloot.search(npcs)
+  end
+
+  $sloot.loot_objs(GameObj.loot)
+
+  $sloot.gather_ammo if not CharSetting[:loot_ammo].empty?
+
+  $sloot.cleanup
+elsif script.vars[1] == 'help'
+  print_option =
+    proc do |option, msg, eg = '', pad = 2|
+      msg = sprintf("%-40s #{$lich_char}#{script.name} #{eg}", msg) if eg != ''
+
+      respond(sprintf('  %s%-25s %s', ' ' * pad, option, msg))
+    end
+
+  respond('SLoot by SpiffyJr')
+  respond('')
+  respond('SLoot is a looter script designed to make looting as fast and easy as possible.')
+  respond('')
+  respond("Basic usage: #{$lich_char}#{script.name}")
+  respond('')
+  respond('Extra commands:')
+  print_option.call('help', 'show this help message')
+  print_option.call('left|right', 'loot your left/right hand')
+  print_option.call('list', 'list current settings')
+  print_option.call('sell', 'sells your default loot sack')
+  print_option.call('silence', 'toggles silencing the script for less feedback')
+  print_option.call('stats', 'displays your loot statistics')
+  print_option.call('update', 'reload after updating from repository')
+  respond('')
+  respond('Gem hoarding:')
+  print_option.call('get # <gem name>', 'get gems from closest locker hoard')
+  print_option.call('forget <room#|all>', 'forget the index for the room (or all)')
+  print_option.call('index', 'index the nearest locker')
+  print_option.call('list [alpha|gem name]', 'list locker contents')
+  print_option.call('store', 'store gems in the nearest locker')
+  respond('')
+  respond('Configure SLoot by setting options:')
+  print_option.call('<setting> <value>', 'set a setting', 'skin true')
+  print_option.call('<setting> +<value>', 'add to setting', 'loot_types +gem')
+  print_option.call('<setting> -<value>', 'delete from setting', 'loot_types -gem')
+  respond('')
+  respond('Available options:')
+  # default_settings.each do |k, v|
+  #   if v[1].nil?
+  #     next
+  #   end
+
+  #   print_option.call(k, v[1])
+  # end
+  # respond("")
+elsif script.vars[1] == 'stats'
+  echo '-- not yet implemented'
+elsif script.vars[1] == 'silence'
+  CharSetting[:silence] = !CharSetting[:silence]
+  if CharSetting[:silence]
+    echo "-- Fine, I'll be quiet now"
+  else
+    echo '-- You want to hear what I have to say? Great!'
+  end
+elsif script.vars[1] == 'hoard'
+  if script.vars[2] == 'forget'
+    if not script.vars[3]
+      echo '-- specify a locker (or all)'
+      exit
+    elsif script.vars[3] == 'all'
+      echo '-- hoard cleared'
+      CharSetting[:hoard] = {}
+    else
+      if not CharSetting[:hoard][script.vars[3].to_i]
+        echo "** #{script.vars[3]} has not been indexed yet"
+        exit
+      end
+      CharSetting[:hoard].delete(script.vars[3].to_i)
+    end
+
+    $sloot = nil
+  elsif script.vars[2] == 'index'
+    $sloot.hoard_index
+  elsif script.vars[2] == 'list'
+    CharSetting.to_hash[:hoard].each_pair do |roomId, data|
+      room = Room[roomId]
+      _respond("#{monsterbold_start}#{room.location} - #{room.title.first} (#{data[:jars].length} jars, #{data[:empty]} empty)#{monsterbold_end}")
+      respond(sprintf('gem                                    count  full'))
+      respond(sprintf('-------------------------------------- -----  ----'))
+
+      jars = data[:jars]
+      if script.vars[3] == 'alpha'
+        jars = jars.sort_by { |obj| obj[:gem] }
+      elsif not script.vars[3].empty? and script.vars[3].length > 0
+        jars = jars.find_all { |obj| obj[:gem] =~ /#{script.vars[3..-1].join(' ')}/i }
+      else
+        jars = jars.sort_by { |obj| -1 * obj[:count] }
+      end
+      jars.each { |jar| respond(sprintf('%-40s %-5d %-4s', jar[:gem], jar[:count], jar[:full] ? 'yes' : 'no')) }
+      respond(sprintf('-------------------------------------- -----  ----'))
+      respond
+    end
+  elsif script.vars[2] == 'store'
+    $sloot.hoard_store
+  elsif script.vars[2] == 'get'
+    count = script.vars[3].to_i
+    if count == 0
+      echo '** invalid gem count; try a number greater than 0'
+      exit
+    end
+    gem = script.vars[4..-1].join(' ')
+    if gem == ''
+      echo '** invalid gem name'
+      exit
+    end
+    $sloot.hoard_get(gem, count)
+  else
+    echo "** You're doing it wrong! Try #{$lich_char}#{script.name} help"
+  end
+elsif script.vars[1] == 'setup'
+  if not defined?(Gtk)
+    echo '-- the setup UI requires Gtk'
+    exit
+  end
+  if not defined?(Gtk) or Gtk::Version::MAJOR < 3
+    echo '-- slootbeta UI requires Gtk3; this is not yet available but coming soon to a Lich near you'
+    # https://bit.ly/WinLich64 to upgrade (warning, this is a beta installer!)
+    exit
+  end
+  SLootSetup.new(script, CharSetting.to_hash).start
+elsif script.vars[1] == 'sell'
+  room = Room.current.id
+  $sloot.sell
+  $sloot.go2(room)
+  $sloot.cleanup
+elsif script.vars[1] == 'bounty'
+  $sloot.sell_bounty
+elsif script.vars[1] == 'stats'
+  CharSetting[:stats].each { |stat, data| echo "-- #{stat}: #{data.inspect}" }
+elsif script.vars[1] == 'load'
+  echo '-- loaded'
+elsif script.vars[1] == 'update'
+  Script.run('repository', 'download slootbeta')
+  echo '-- updated'
+  $sloot = nil
+elsif script.vars[1] == 'left' or script.vars[1] == 'right'
+  obj = script.vars[1] == 'right' ? GameObj.right_hand : GameObj.left_hand
+  obj.type == 'box' ? $sloot.loot_box(obj) : $sloot.stow_it(obj)
+elsif script.vars[1] == 'locksmith'
+  $sloot.sell_locksmith_pool($sloot.find_boxes)
+elsif script.vars[1] == 'list'
+  if script.vars[2] !~ /^(?:all|hoard|loot|sell|skin)$/i
+    echo "usage: #{$lich_char}#{script.name} list <all|hoard|loot|sell|skin>"
+    exit
+  end
+  SLootSetup.new(script, CharSetting.to_hash).list(script.vars[2])
+elsif script.vars[0] =~ /^([^\s]+)(.*)?$/
+  SLootSetup.new(script, CharSettings.to_hash).update_setting($1.downcase.to_sym, $2.strip.downcase)
+  $sloot = nil
+elsif not script.vars[1].nil?
+  echo "** You're doing it wrong! Try #{$lich_char}#{script.name} help"
+end

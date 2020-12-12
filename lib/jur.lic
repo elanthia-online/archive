@@ -1,0 +1,57 @@
+=begin
+This script helps you get around using the urchin guide system.
+
+For comments or questions, contact Jara.
+
+Usage: ;jur location  ;jur table  ;jur bank  ;jur tsc(landing)  ;jur tc (icemule)
+
+If having trouble, make sure you spell the destination correctly. (Abbreviations are ok.)
+
+Version 1.1
+=end
+
+until checkstanding == true
+	waitrt?
+	dothistimeout "stand", 3, /You stand/
+end
+	
+
+if script.vars[1] == nil
+	fput "urch guide"
+	echo
+	echo
+	sleep 1
+	respond "#{Char.name}, please specify where you want to go, use the above list as reference."
+	echo
+	respond "Usage: ;jur location  ;jur table  ;jur bank  ;jur tsc(landing)  ;jur tc (icemule)"
+	echo
+	respond "If having trouble, make sure you spell the destination correctly. (Abbreviations are ok.)"
+	echo
+	kill_script "jur"
+
+end
+
+if script.vars[1] =~ /\b+/
+	fput "urch guide #{script.vars[1]}"
+
+	while line = get
+	if line =~ /Invalid place/
+		sleep 0.1
+		respond "I'm sorry #{Char.name}, there was a spelling issue with your destination.  Is it in the list?"
+		echo
+		kill_script "jur"
+	elsif line =~ /nods to you and rapidly guides/
+		sleep 0.1
+		respond "#{Char.name}, you have arrived. Thanks for using Jur."
+		echo
+		kill_script "jur"
+	elsif line =~ /you are already here/
+		sleep 0.1
+		respond "Really #{Char.name}? You're already here!"
+		echo
+		kill_script "jur"
+	end
+	end
+end
+
+	

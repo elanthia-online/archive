@@ -1,0 +1,166 @@
+=begin
+
+  Squelching a bunch of noise at east tower for pickers at the box pool rooms.
+  
+  Work in progress
+  
+  - squelches a lot of boxwork
+  - squelches a handful of ambients
+  - replaces fwi transport messages with a simple alternative.
+  - adds owner's name to scarabs.
+  
+  Thanks to Tysong for lots of things like tsquelch
+  
+            author: Xanlin (Xanlin#4407 on discord)
+            game: GS
+            tags: squelch, locksmith, picking, boxpool, worker
+  requires_trust: true
+        required: Lich >= 4.6.4
+         version: 0.2
+=end
+@debug = false;
+@debug = true if XMLData.name == "Xanlin";
+
+player = "<a exist=\"-[^\/]+\/a>"
+player_name = "<a exist=\"(?<player_id>\\-\\d+)\" noun=\"(?<player_noun>\\w+)\"[^>]*>(?<player_name>[A-Z]\\w+)'?s?<\/a>"
+@player_name = /(<a exist="\-[^>]+>[A-Z]\w+'?s?<\/a>)/
+item   = "<a exist=\"[^\/]+\/a>"
+box    = "<a exist=\"[^\"]+\" noun=\"(?:box|chest|coffer|strongbox|trunk)\"[^\/]+\/a>"
+tools  =  "<a exist=\"[^\"]+\" noun=\"(?:vial|needle|keyring|hairstick|toothpick|lockpick|fishbone|sliver|corkscrew|pin|vambrace|bracer|calipers|toolkit)\"[^\/]+\/a>"
+junk   =  "<a exist=\"[^\"]+\" noun=\"(?:spider)\"[^\/]+\/a>"
+@noise  =  /^.*?((?!has a|is wearing a).)*?<a exist=\"[^\"]+\" noun=\"(?:tattoo|kitten|fish|puppy|trapdoor|packrat)\"[^\/]+\/a>.*?$/
+@comp = /^(<[^a]|<clear|<comp|<dialog|<left|<right|<ouput|<pop|<push|<prompt|<resource|<stream|<style)|^#{player} (?:has a|is wearing|accepted|offers you|offers #{player})|^It looks like a .*? trap/
+
+ambients = "^(?:#{player}'s fish|The peach pit locket hanging from #{player} neck glows|A faint fiery \w+ glow from in the shadows rotates around in a circle.|You hear a belch from #{player})"
+spells = "^(?:The focused look leaves #{player}.|A look of concentration briefly passes across #{player} face|#{player} becomes calm and focused.|Mirage-like distortions surround|A scintillating light surrounds #{player}|The scintillating light fades from #{player}|#{player} renews|#{player} makes a (?:complex|quick gesture)|#{player} takes a deep breath and quickly mutters an invocation|#{player} fingertips begin to glow with a soft light|Nothing Happens\.|^#{player} appears to be keenly aware of #{player} surroundings.|^#{player} loses some awareness|^#{player} #{box} vibrates slightly|^An? #{box} vibrates slightly)"
+if Char.prof !~ /Bard|Sorcerer|Wizard|Warrior/
+  spells = "#{spells}|^You hear a soft click from the #{box} and it suddenly flies open."
+end
+preps = "^Using very precise and slow gestures with his hands|^A haze of black mist gathers around #{player} as #{player} prepares a spell...|^Ethereal flames fly from #{player} hands"
+misc = "^#{player} (?:looks up with a big grin|powerfully purges|gestures\.|appears pleased)"
+traps = "^Having found a trap on the #{box}, #{player} begins"
+bracers = "^The mechanized arm quickly retreats back into the interior of the"
+gagme = "^#{player} looks slightly alarmed as #{player} begins to gag for no reason"
+rogues = "^Taking a gentle turn, #{player} chokes up|^#{player} removes a (?:set|pair) of metal grips from|^Using a pair of metal grips, #{player} carefully removes|^Taking a small lump of putty from #{player}|^With a quick flick of the wrist, #{player} spins #{player}|^#{player} carefully pushes a small wad of cotton into the lock mechanism"
+
+
+
+@ignore_pattern = /^#{player}(?:(?!is wearing|offers you|is holding|is wearing).)*?#{tools}|^#{player}(?:(?!is wearing|offers you|is holding|is wearing).)*?#{box}|^ *Then\.\.\.CLICK!  It (?:opens|locks)!|#{spells}|#{misc}|#{ambients}|#{traps}|#{bracers}|^A #{junk}|#{preps}|#{rogues}|#{gagme}/
+
+@departures = /^#{player} eyes glaze over and #{player} turns pale.  In the space between|#{player} (?:closes #{player} eyes and takes |places #{player} hand over #{player} |reaches for #{player} #{item} and|shivers as silvery droplets begin |stretches out #{player} hand just |suddenly freezes in place as |touches #{player} #{item} and immediately |touches #{player} #{item} and gives a slight shudder|touches the surface of #{player} |turns #{player} #{item} idly. It |turns the key on the |eyes stare into the distance,)|As #{player} reaches for #{player} #{item},|As #{player} touches #{player} #{item}, flames|While turning #{player} #{item}, #{player} face|^(?:A brisk breeze begins to swirl|A dense fog rolls into the|A greenish pulsing glow builds around|A mote of multi-hued light appears|A sudden breeze carrying grains of|A sudden breeze carrying silvery white|A sudden breeze picks up around|As a sudden gust of wind|Chill and foreboding, a faint zephyr|Out of nowhere, tiny bubbles start|Rising on the air, the sound|Several halfling pirates shimmer into existence,|Shadowy tendrils rise from the ground|The faint scent of seawater eddies|The sound of crashing waves suddenly|The unmistakable smells of sulphur, ether,|Tiny cracks begin to appear across|Wisps of red light rise above|You are blinded momentarily by a ).*?#{player}/
+@arrivals = /^#{player} slowly fades into view with a gasp of breath and a slightly disoriented look|#{player} suddenly (?:appears out of nowhere|shimmers into view)|A brilliant bolt of lightning suddenly.*?#{player}|A column of fire appears out.*?#{player}|A dense fog rolls into the.*?#{player}|A faint popping sound heralds the.*?#{player}|A haunting, tinny melody tinkles through.*?#{player}|A large iridescent bubble floats into.*?#{player}|A latticework of ice crystals crackles.*?#{player}|A low-pitched hum fills the air..*?#{player}|A pool of viscous, miasmatic fog.*?#{player}|A single glowing green vine creeps.*?#{player}|A single mote of multi-hued light.*?#{player}|A small whirlwind races into the.*?#{player}|A sudden breeze blows through the.*?#{player}|A sudden flash of blinding light.*?#{player}|A sudden gust of wind swirls.*?#{player}|A sudden whirlwind of verdant green,.*?#{player}|A veritable horde of butterflies descends.*?#{player}|A whirling bluish-gray mist quickly coalesces.*?#{player}|An iridescent ray of light forms.*?#{player}|As a sudden gust of wind.*?#{player}|In a storm of high-pitched squeals.*?#{player}|Several halfling pirates shimmer into existence,.*?#{player}|Shadowy tendrils rise from the ground.*?#{player}|Shattered pieces of porcelain arrive on.*?#{player}|Sudden gusts of wind swirl through.*?#{player}|The sound of crashing waves suddenly.*?#{player}|The unmistakable scents of sulphur, ether,.*?#{player}|With a faint popping noise, .*?#{player}|You notice quicksilver seeping up from.*?#{player}/ 
+
+#if @debug
+#echo @departures
+#echo
+#echo @arrivals
+#end
+
+@pool_rooms = [ 3807 ];
+@scarab_link_pattern = /(<a exist="\d+" noun="scarab">[^<]+<\/a>)/
+scarab = "<a exist=\"(?<scarab_id>\\d+)\" noun=\"scarab\">(?<scarab_name>[^<]+)<\/a>"
+@scarab_pattern = "<a exist=\"(?<scarab_id>\d+)\" noun=\"scarab\">(?<scarab_name>[^<]+<\/a>"
+
+@room_scarab = /<component id='room objs'>  You also see an? #{scarab}, .*?<\/component>/
+#player_id, player_noun, player_name, scarab_id, scarab_name
+@disarm_notice = /Having found a trap on the #{box}, #{player_name} begins to attempt to disarm it...|You carefully nudge the scarab free of its prison without disturbing the lock too much.  The scarab falls from the lock and onto the ground in front of you./
+@scarab_disarming = /#{player_name} fiddles with an? #{scarab} for a moment\./
+@scarab_picked_up = /#{player_name} picks up an? #{scarab}\./
+
+#scarab hash
+@scarabs = Hash.new{|hash,key| hash[key]={ "spotted" => Time.now, "owner" => nil, "status" => "fresh", "name" => nil }};
+
+@scarab_replace = Hash.new
+@fresh_scarab_id = nil
+  # status > fresh, disarmed, gone, live?
+@new_scarab = false;
+
+silence = proc {
+  action = proc { |server_string|
+    if server_string.strip.length == 0;
+      nil;next;
+    elsif @comp.match(server_string) and !@scarab_link_pattern.match(server_string)
+      server_string;
+    elsif (m = @room_scarab.match(server_string))
+      echo "room scarab block" if @debug;
+      #echo "!! saw a scarab #{m.inspect}" if @debug;
+      if @scarab_replace["<a exist=\"#{m[:scarab_id]})\" noun=\"scarab\">#{m[:scarab_name]}<\/a>"].nil? && @new_scarab == false
+        @scarabs[m[:scarab_id]];
+        @scarabs[m[:scarab_id]]["name"]=m[:scarab_name];
+        @scarab_replace["<a exist=\"#{m[:scarab_id]})\" noun=\"scarab\">#{m[:scarab_name]}<\/a>"] = "<a exist=\"#{m[:scarab_id]})\" noun=\"scarab\">(new) #{m[:scarab_name]}<\/a>"
+        @new_scarab = true;
+        @fresh_scarab_id = m[:scarab_id]
+      end;
+      server_string.gsub(@scarab_link_pattern,@scarab_replace);
+    elsif @new_scarab == true and (m = @disarm_notice.match(server_string))
+      echo "new scarab block" if @debug;
+      if @scarabs[@fresh_scarab_id]["owner"].nil?
+        new_owner = nil
+        if m[:player_name]
+          new_owner = m[:player_name]
+        elsif server_string =~ /You carefully nudge the scarab free of its prison without disturbing the lock too much.  The scarab falls from the lock and onto the ground in front of you./
+          new_owner = XMLData.name
+        end
+        @scarabs[@fresh_scarab_id]["owner"] = new_owner
+        @scarab_replace["<a exist=\"#{@fresh_scarab_id}\" noun=\"scarab\">#{@scarabs[@fresh_scarab_id]["name"]}<\/a>"] = "<a exist=\"#{@fresh_scarab_id}\" noun=\"scarab\">#{@scarabs[@fresh_scarab_id]["owner"]}'s #{@scarabs[@fresh_scarab_id]["name"]}<\/a>"
+      end
+      @fresh_scarab_id = nil
+      @new_scarab = false;
+      server_string;
+    elsif (m = @scarab_disarming.match(server_string))
+      echo "scarab disarmed" if @debug;
+      @scarabs[m[:scarab_id]]["status"] = "disarmed" if @scarabs[m[:scarab_id]]["status"] == "fresh";
+      server_string.sub(@scarab_link_pattern,@scarab_replace);
+      
+    elsif (m = @scarab_picked_up.match(server_string))
+      echo "scarab picked up" if @debug
+      @scarabs[m[:scarab_id]]["status"] = "gone" if @scarabs[m[:scarab_id]]["status"] != "gone";
+      server_string.sub(@scarab_link_pattern,@scarab_replace);
+    elsif @noise.match(server_string) and !@comp.match(server_string);
+      #echo server_string if @debug;
+      nil;
+    elsif @ignore_pattern.match(server_string) and !@comp.match(server_string); 
+      nil;next;
+    elsif @arrivals.match(server_string);
+      if @player_name.match(server_string)
+        _respond "#{$1.gsub("'s","")} just transported from Mist Harbor." 
+        nil;
+      else
+        server_string
+      end
+      next;
+    elsif @departures.match(server_string)
+      if @player_name.match(server_string)
+        _respond "#{$1.gsub("'s","")} just transported to Mist Harbor." 
+        nil;
+      else
+        server_string
+      end
+      next;
+    else;
+      server_string.gsub(/<\/component>(\r?\n)+$/,"</component>\r\n");
+    end;
+  };
+  DownstreamHook.add("#{script.name}_silence", action);
+};
+
+before_dying {DownstreamHook.remove("#{script.name}_silence"); };
+
+
+@room_count = XMLData.room_count;
+@quiet_time = false;
+loop {
+  if (@pool_rooms.include?(Room.current.id)) && @quiet_time == false;
+    echo "Now Squelching!" if @debug;
+    silence.call;
+    @quiet_time = true;
+  end;
+  if !(@pool_rooms.include?(Room.current.id)) && @quiet_time == true;
+    DownstreamHook.remove("#{script.name}_silence");
+    echo "End Squelching!" if @debug;
+    @quiet_time = false;
+  end;
+  sleep 1;
+  wait_while { @room_count == XMLData.room_count };
+  @room_count = XMLData.room_count;
+}

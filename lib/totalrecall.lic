@@ -1,0 +1,41 @@
+=begin
+update: read the help ;totalrecall help
+
+This script will fix EVERY memory problem you have with Gemstone, Simutronics, and Lich.
+simply run it by typing ;totalrecall
+
+For a permanent fix add it to your favorites - not recommended for novices.
+
+known bugs:
+20181110 - many
+20181011 - a few less
+=end
+
+echo "IMPLEMENTING THE TOTAL RECALL"
+pause 1
+echo "Working."
+pause 1
+echo "Working.."
+pause 1
+echo "I can't believe it, it's like a dream..."
+pause 5
+echo "Working..."
+pause 1
+echo "What do you want, Mr. Quaid?"
+pause 1
+fput "mychar thinks The same as you, to remember"
+pause 5
+echo "That's now. In an hour, he could have total recall..."
+pause 5
+#send_to_script('lnet',"chat to Naamit Your totalrecall script expanded my mind.")
+pause 5
+echo "Baby, you make me wish I had three hands."
+pause 10
+echo "**********************************************************"
+echo "**********************************************************"
+echo "     Sorry, Quaid. Your whole life is just a dream. "
+echo "**********************************************************"
+echo "**********************************************************"
+pause 10
+
+exit

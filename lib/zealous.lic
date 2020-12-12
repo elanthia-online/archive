@@ -1,0 +1,26 @@
+=begin
+
+Zeal upkeep
+
+Name: Zealous
+Author: Glaves
+Version: 1.0b
+Tags: Zeal, 1650, Paladin
+
+=end
+
+if Spell[1650].affordable && !Spell[1650].active?
+Spell[1650].cast
+waitrt?
+waitcastrt?
+fput "Incarnate Zeal"
+end
+
+loop{
+
+ wait_while {XMLData.active_spells.include?("Incarnate Zeal")}
+ waitrt?
+ waitcastrt?
+ fput "Incarnate Zeal"
+ 
+ }

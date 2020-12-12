@@ -1,0 +1,18 @@
+if UserVars.known_characters == nil
+  UserVars.known_characters = Array.new
+end
+
+while line = get
+  if line =~ /\* (.*) joins the adventure/
+    character = $1
+    if !UserVars.known_characters.include?(character)
+      sleep 5
+      send_to_script("lnet","chat to #{character} Hello! It looks like you may be new to shattered.  If you are then Welcome!  Please come and join us in the Nexus, Room #20239.  We also have a Shattered Discord @ https://discord.gg/GwBXjXc")
+    end
+  elsif line =~ /(.*) fades away into nothingness...  Creepy!/
+    character = $1
+    if !UserVars.known_characters.include?(character)
+      UserVars.known_characters.push(character)
+    end
+  end
+end 

@@ -1,0 +1,22 @@
+# Cast 917 once at every hostile npc in the room
+# Will not cast at npc's that are flying
+#
+# Select FIRE or COLD Using
+# 	;917 FIRE or ;917 COLD
+# 
+# 
+# ~Glaves
+
+element = script.vars[1]
+
+GameObj.targets.each { |mob|
+if (mob.status !~ /flying/) && Spell[917].affordable?
+	waitrt?
+	waitcastrt?
+	fput "target ##{mob.id}"
+	fput "incant 917 #{element}"
+	waitcastrt?
+	waitrt?
+	sleep 1
+end
+}

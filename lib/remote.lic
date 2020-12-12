@@ -1,0 +1,34 @@
+# Lnet Remote Control 
+# You need to change the me = "-GSIV:Glaves" to the name of the person you want to be able to send commands
+# You can set multiple users with ["-GSIV:Glaves", "-GSIV:Omind" ]
+# author: Glaves
+# tags: Remote, Lnet, Control, Robot, Notriggers, script, laucnher, remote control, RC
+# Props to Mitch for helping me out
+
+dothisscript = nil
+roomnumber = nil
+me = "-GSIV:Glaves"
+
+while line = get
+  if line =~ /\[Private\](.*): \"(.*)\"/
+    command_sender = $1
+    if command_sender == me
+      command = $2
+      commandarray = command.split(' ')
+      if commandarray.first =~ /(S|s)cript/
+        dothisscript = commandarray[1]
+        if commandarray[2]
+          thisway = commandarray[2]
+          Script.run("#{dothisscript}", "#{thisway}")
+        else
+          Script.run("#{dothisscript}")
+        end
+      elsif commandarray.first =~ /(G|g)o2/
+        roomnumber = commandarray.last
+        Script.run("go2", "#{roomnumber}")
+      else
+        fput "#{command}"
+      end
+    end
+  end
+end

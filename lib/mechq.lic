@@ -1,0 +1,220 @@
+module Mechq
+  module ContainerCache
+    module Query
+      MatchAttrs = -> thing, attrs {
+        attrs.select do |method, val| thing.send(method).eql?(val) end
+          .size.eql?(attrs.keys.size)
+      }
+    end
+    
+    EXIST         =  %r{<a exist=(?:'|")(?<id>.*?)(?:'|") noun=(?:'|")(?<noun>.*?)(?:'|")>(?<name>.*?)</a>}
+    START_INV     = %{You are currently wearing and carrying:}
+    END_INV       = %{displayed.)}
+    @containers ||= []
+    
+    def self.refresh()
+      begin
+        @containers = []
+        Script.current.want_downstream_xml = true
+        fput "inv full containers"
+        in_inv = false
+        while line = get
+          in_inv = true if line.include?(START_INV)
+          next unless in_inv
+          line.scan(EXIST).each do |matches| @containers << GameObj.new(*matches) end
+          break if line.include?(END_INV)
+        end
+      ensure
+        Script.current.want_downstream_xml = false
+      end
+    end
+  
+    def self.fetch()
+      refresh() if @containers.empty?
+      @containers
+    end
+
+    def self.find(**attrs)
+      fetch.find do |container| Query::MatchAttrs.(container, attrs) end
+    end
+  
+    def self.scan()
+      fetch.each do |container|
+        fput "look in ##{container.id}" if GameObj.containers[container.id].nil?
+      end
+    end
+
+    def self.find_container_of(**attrs)
+      fetch.find do |container| 
+        fput "look in ##{container.id}" if GameObj.containers[container.id].nil?
+        not container.contents.find do |item| Query::MatchAttrs.(item, attrs) end.nil?
+      end
+    end
+
+    def self.contents(**attrs)
+      container = find_container_of(**attrs)
+      return false if container.nil?
+      [container, 
+        container.contents.to_a.find do |item| Query::MatchAttrs.(item, attrs) end]
+    end
+
+    def self.method_missing(method, *args, &block)
+      fetch.send(method, *args, &block)
+    end
+  end
+end
+
+module Mechq
+  module Silvers
+    SILVERS = %r[Silver: (?<silver>\d+)]
+
+    def self.count()
+      result = dothistimeout("info", 5, SILVERS) or fail "unknown outcome"
+      result.match(SILVERS)[:silver].to_i
+    end
+  end
+end
+
+module Mechq
+  module Order
+    def self.premium_fletcher()
+      id = Map.list.find do |room| 
+        room.tags.include?("fletcher") and room.location.downcase.include?("mist harbor")
+      end.id
+      Script.run("go2", id.to_s) unless Room.current.id.to_s.eql?(id.to_s)
+      fail "could not find a way to the premium fletcher" unless Room.current.id.to_s.eql?(id.to_s)
+      yield if block_given?
+    end
+
+    def self.parse_menu_line(line, kind)
+      line.split(%r[\s{2,}])
+        .find do |part| part.include?(kind) end
+        .split("").take_while do |char| char.match(%r{[0-9]}) end.join
+    end
+
+    def self.find_menu_number(kind)
+      ok = dothistimeout("order", 5, /Backroom Catalog/)
+      fail "did not detect backroom access" unless ok
+      ttl = Time.now + 2
+      while line = get
+        fail "timed out finding Material(#{material}:#{size})" if Time.now > ttl
+        return parse_menu_line(line.strip, kind) if line.include?(kind)
+      end
+    end
+
+    def self.material(kind, amount)
+      num = find_menu_number(kind)
+      ok = dothistimeout("order #{amount} #{num}", 5, /You ask about the price of/)
+      ok or fail "could not initiate transaction"
+      ordered = dothistimeout("buy", 5, /hands you/)
+      fail "could not order Menu(number: #{num})" if ordered.nil?
+    end
+  end
+end
+
+module Mechq
+  def self.raise_cannot_find(thing)
+    fail Exception, "could not find Item(#{thing}) in your inventory"
+  end
+
+  def self.handaxe()
+    (container, axe) = (ContainerCache.contents(noun: "hatchet") or
+                        ContainerCache.contents(noun: "handaxe") or
+                        raise_cannot_find("hatchet or handaxe"))
+    if block_given?
+      fput %[_drag ##{axe.id} #{GameObj.right_hand ? "right" : "left"}]
+      yield(axe) 
+      fput "_drag ##{axe.id} ##{container.id}"
+    end
+  end
+
+  def self.quiver()
+    ContainerCache.find(name: %[gold-riveted light mithril quiver]) or
+    raise_cannot_find("gold-riveted light mithril quiver")
+  end
+
+  def self.add_to_quiver(state, shafts)
+    res = dothistimeout("_drag ##{shafts.id} ##{quiver.id}", 3, /^You place|^You manage to fit/)
+    fail "could not add the shafts to the quiver" if res.nil?
+    state[:made] = 1_000 if res =~ /^You manage to fit/
+  end
+
+  def self.deposit_all()
+    Script.run("go2", "bank")
+    fput "deposit all"
+  end
+
+  def self.withdraw(num)
+    deposit_all()
+    fput "withdraw #{num} silver"
+    Silvers.count.to_s.eql?(num.to_s) or fail "could not withdraw silvers"
+  end
+
+  CUT = %r[With carefully placed cuts, you split (?:.*?) into (?<shafts>\d+) narrow sections.]
+  def self.split(item, state)
+    Mechq.handaxe do |axe|
+      cut = dothistimeout("cut arrow shaft from ##{item.id}", 5, CUT)
+      fail "could not cut shafts" if cut.nil?
+      waitrt?
+      state[:made] = state.fetch(:made) + cut.match(CUT)[:shafts].to_i
+      Mechq.add_to_quiver(state,
+        [GameObj.right_hand, GameObj.left_hand].find do |i| i.noun.eql?("shafts") end)
+    end
+  end
+
+  def self.produce_arrows()
+    fput "close ##{quiver.id}"
+    hecho = dothistimeout("turn ##{quiver.id}", 5, /You hear the churning of gears followed by a series of grinding and cutting noises./)
+    fail "something went wrong with manufacturing" if hecho.nil?
+    fput "open ##{quiver.id}"
+  end
+
+  def self.sitrep(state)
+    _respond "<b>Arrows(made:#{state[:made]})</b>"
+  end
+
+  def self.use_existing(kind, state)
+    name = [kind, "wood"].join(" ")
+    echo("scanning inventory for Item(#{name})...")
+    while state.fetch(:made) < 100
+      (_, limb) = ContainerCache.contents(name: name)
+      return echo("no pre-existing limbs found") if limb.nil?
+      fput "_drag ##{limb.id} right"
+      ttl = Time.now + 5
+      wait_until do Time.now > ttl or GameObj.right_hand.id.eql?(limb.id) end
+      raise "could not get Item(#{kind})" unless GameObj.right_hand.id.eql?(limb.id)
+      Mechq.split(GameObj.right_hand, state)
+      sitrep(state)
+    end
+  end
+  
+  LIMB = "limb of faewood"
+  
+  def self.main()
+    starting_room = Room.current.id.to_s
+    handaxe and quiver # exist
+    multifput "open ##{quiver.id}", "look in ##{quiver.id}"
+    3.times do 
+      fail "the quiver is not empty" unless quiver.contents.reject do |i| i.noun.eql?("shafts") end.empty? 
+      sleep 0.2
+    end
+    empty_hands
+    state = {made: 0}
+    use_existing(LIMB, state)
+    return Mechq.produce_arrows() if state.fetch(:made, 0) > 99
+    withdraw 20_000
+    Order.premium_fletcher do
+      while state.fetch(:made, 0) < 100 and state.fetch(:attempts, 0) < 5
+        Order.material(LIMB, 1)
+        Mechq.split(GameObj.right_hand, state) unless GameObj.right_hand.nil?
+        sitrep(state)
+        state[:attempts] = state.fetch(:attempts, 0) + 1
+      end
+    end
+    Mechq.produce_arrows()
+    deposit_all()
+    Script("go2", starting_room)
+  end
+
+  Mechq.main()
+end

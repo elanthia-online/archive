@@ -1,0 +1,190 @@
+=begin
+
+	This script will register everything you are wearing and everything in your open containers. Script will not register something that has already been registered.
+
+	Typing ";register-all" will only register items that haven't already been registered and will not register things like gems and alchemy components.
+	Typing ";register-all all"  will register every worn item and items in open containers, even things like gems and items that have already been registered. Should only be used if you're sure you want to register everything.
+	Typing ";register-all reg" will register everything that has already been registered. Useful for when you just want to make sure your currently registered items are up to date in case their properties have changed.
+
+	Adding the word "mark" after any of the above command lines will also mark whatever is registered.
+
+	Example:
+
+	Typing ";register-all reg mark" will register everything that has already been registered and mark the same items as well.
+
+	Author: Tgo01
+	Version 11
+=end
+
+gems = /^((mithril|faenor|rhimar|ora|vultite)\-bloom|thunderstone|doomstone|soulstone|riftshard|geode|rosepar|firestone|bloodjewel|pearl|corestone|shell|sard|sphene|jasper|marble|eostone|maoral|agate|amber|amethyst|blazestar|carbuncle|chalcedony|coral|despanal|diamond|emerald|feystone|garnet|gem|mica|thanot|glimaerstone|heliodor|hyacinth|jacinth|moonstone|onyx|quartz|ruby|sapphire|spinel|topaz|tourmaline|turquoise|zircon|peridot|starstone|dreamstone|deathstone|sunstone|sandsilver|bluerock|diopside|ivory|nugget|jade|bloodstone|cordierite|sardonyx|opal|stone|lapis|obsidian|beryl|mother\-of\-pearl|azurite|spherine|wyrdshard|riftstone|aetherstone|pyrite)/
+
+food = /^(doughnut|tart|cupcake|cookie|muffin)$/
+
+ammo = /^(arrows?|bolts?)$/
+
+scrolls = /^(palimpsest|paper|papyrus|parchment|scroll|vellum)$/
+
+wands = /^(rod|wand|baton)$/
+
+skins = /^((ambergris|antler|beard|bone|caederine|canine|carapace|claw|crest|ear|ears|eye|eyeball|fang|feather|fin|finger|firethorn|fishscale|fur|heart|hide|hoof|horn|horseshoe|incisor|jaw|jawbone|knuckle|leg|mandible|mane|nail|nose|paw|pelt|pincer|plume|rattle|sail|scale|scalp|scraping|sheepskin|shinbone|shroud|skin|skull|snout|spine|stinger|tail|tailfeather|tailspike|talon|tentacle|thumb|toe|tongue|tooth|tusk|whisker|wing)s?)$/
+
+boxes = /^(box|chest|coffer|strongbox|trunk)$/
+
+junk = /^(smooth stone|steel shield|scratched steel helm|spirit shard|small block of salt|table leg|some tree bark|piece of iron|moldy bone|chipped brick|some tattered cloth|(scratched|corroded|polished|shiny|tarnished|dented|rusty|bent) (ring|medallion|earring|anklet|bracelet|fork|plate|coin|cup|nail|spoon|doorknob|horseshoe))/
+
+herbs = /^(some acantha leaf|some spicy acantha leaf|tincture of acantha|tincture of yabathilium|yabathilium fruit|iceberry tart|some acantha leaf tea|grey mushroom potion|flagon of Olak's Ol'style ale|barrel of Olak's Ol'style ale|flagon of Bloody Krolvin ale|barrel of Bloody Krolvin ale|some aloeas stem|some withered aloeas stem|tincture of aloeas|some ram's bladder|feverfew potion|sticky lichen tea|flagon of Dark Swampwater ale|barrel of Dark Swampwater ale|rose-marrow potion|crystalline rose-marrow elixir|tincture of rose-marrow|elk horn potion|some feverfew tea|rusty red ale|flagon of Semak's Smooth ale|barrel of Semak's Smooth ale|brostheras potion|crystalline brostheras elixir|tincture of brostheras|some polar bear fat soup|pennyroyal potion|stone soot brew|flagon of Reaper's Red ale|barrel of Reaper's Red ale|some haphip root|some dirty haphip root|tincture of haphip|sparrowhawk pie|pennyroyal tea|dull crimson ale|flagon of Agrak's Amber ale|barrel of Agrak's Amber ale|some pothinir grass|some bright green pothinir grass|tincture of pothinir|musk ox tart|ginkgo nut potion|roasted ratweed tea|flagon of Aged Schooner ale|barrel of Aged Schooner ale|some basal moss|tincture of moss|sticky ball of basal moss|tincture of basal|some tundra grass|some ginkgo nut tea|chunky black ale|flagon of Mama Dwarf's ale|barrel of Mama Dwarf's ale|wingstem potion|crystalline wingstem elixir|tincture of wingstem|earthworm potion|wyrmwood root potion|dirty crevice brew|flagon of Wort's Winter ale|barrel of Wort's Winter ale|talneo potion|crystalline talneo elixir|tincture of talneo|rock lizard potion|wyrmwood root tea|brown weedroot ale|flagon of Gert's Homemade ale|barrel of Gert's Homemade ale|bur-clover potion|crystalline bur-clover elixir|tincture of bur-clover|starfish potion|daggit root potion|dirty rat fur potion|flagon of Volcano Vision ale|barrel of Volcano Vision ale|some ephlox moss|gooey ball of ephlox moss|tincture of ephlox|some frog's bone porridge|sweetfern potion|crushed cavegrass tea|flagon of Golden Goose ale|barrel of Golden Goose ale|some ambrominas leaf|some sugary ambrominas leaf|tincture of ambrominas|Dabbings Family special tart|some sweetfern tea|bubbling brown ale|flagon of Lost Dogwater ale|barrel of Lost Dogwater ale|some calamia fruit|some ripe calamia fruit|tincture of calamia|some walrus blubber|manroot potion|stalactite brew|flagon of Mad Mutt Frothy ale|barrel of Mad Mutt Frothy ale|some cactacae spine|some prickly cactacae spine|tincture of cactacae|some elk fat gel|manroot tea|spotted toadstool ale|flagon of Bearded Ladies' ale|barrel of Bearded Ladies' ale|(some|small) sovyn clove|sovyn clove|tincture of sovyn|some rock ptarmigan feathers|angelica root potion|grainy black potion|flagon of Captn' Pegleg's ale|barrel of Captn' Pegleg's ale|bolmara potion|crystalline bolmara elixir|tincture of bolmara|snowflake elixir|red lichen potion|glowing mold tea|flagon of Kenar's Dropjaw ale|barrel of Kenar's Dropjaw ale|some wolifrew lichen|some dry wolifrew lichen|tincture of wolifrew|Leaftoe's lichen tart|some red lichen tea|thick foggy ale|flagon of Orc's Head ale|barrel of Orc's Head ale|some woth flower|some fragrant woth flower|tincture of woth|flower-shaped tart|valerian root potion|stalagmite brew|flagon of Dacra's Dream ale|barrel of Dacra's Dream ale|some torban leaf|some fresh torban leaf|tincture of torban|Ma Leaftoe's spiced torban tart|valerian root tea|dark frothing ale|flagon of Miner's Muddy ale|barrel of Miner's Muddy ale)/
+
+reagents = /^(some powdered |some ground |some mashed |vial of viscous liquid|small troll tooth|large troll tooth|ayanad crystal|s\'ayanad crystal|t\'ayanad crystal|n\'ayanad crystal|glimmering blue essence shard|glowing violet essence shard|some essence of earth|some essence of air|some essence of fire|some glimmering blue essence dust|some glowing violet essence dust|radiant crimson essence shard|perfect myklian belly scale|crystalline globe|pepperthorn root|ayana weed|flask of pure oil|vial of pearlescent oil|essence shard|some essence of water|flask of pure water|flask of clear water|ayana leaf|ayana lichen|ayana root|empty flask|some faintly glowing dust|elemental core|crystal core|pristine nymph's hair|tiny golden seed|vial of farlook vitreous humor|inky necrotic core|some radiant crimson essence dust|glowing violet mote of essence|glimmering blue mote of essence|radiant crimson mote of essence|ayana berry|pristine sprite\'s hair|pristine siren\'s hair|dark glimmering crystal|some faintly radiant dust|vial of faintly glowing aelotoi tears|handful of sea salt)/
+
+alchemy = /^((minor|lesser|greater|full) (mana|mana regeneration|mana\-well) potion|glowing moonstone talisman|mottled malachite talisman|dark murky potion|clear potion|hazy glass vial|glowing brilliant silver potion|silvery potion|diaphanous eight\-sided crystal|dark translucent crystal|sapphire lens|emerald lens|diamond lens|ruby lens|amethyst lens|shadowglass lens|small crystal flask|(clouded|warped|chipped|tapered|smoky|thick|slender) glass vial)/
+
+notes = /^(Vornavis promissory note|City-\States promissory note|mining chit|Wehnimer\'s promissory note|Icemule promissory note)/
+
+cursed = /^(oblivion quartz|black ora|urglaes fang)/
+
+magic = /^(crystal amulet|gold\-framed clear crystal lens|dull gold coin|white flask|impure potion|pure potion|small glowing vial|grot t\'kel potion|dirtokh potion|ayveneh potion|shiny vor'taz horn|dimly glowing enruned bone talisman|(light violet|emerald|reddish-brown|wavering|icy blue|stone grey|amethyst|dark red) sphere|(dingy|plain|braided|twisted|intricate|large|thin|wide|polished|scratched|thick|dull|faded|small|flawless|inlaid|dirt\-caked|ornate|exquisite|shiny|bright|narrow) gold ring|gold ring)/
+
+lm = /^((green-tinted|thick glass|clear glass) vial|steel needle|steel jaws|(light violet|emerald|reddish-brown|wavering|icy blue|stone grey|amethyst|dark red) sphere|dark crystal|calipers|(superior|strong|solid|warped|thin|brittle) wooden wedge|lock assembly)/
+
+misc = /^(some fine opaline dust)/
+
+container_item = Array.new
+item = Array.new
+stow_container = Array.new
+container_line = Array.new
+item_line = Array.new
+should_register_containers = Array.new
+should_register_items = Array.new
+number_container = 0
+number_item = 0
+current_stow_container = nil
+number_of_items = nil
+time_to_finish = nil
+
+fput "stow right" if checkright != nil
+fput "stow left" if checkleft != nil
+status_tags
+
+fput "inv full"
+
+while line = get
+	if line =~ /^\s{2}(an?|the|some).*exist="(\d+)".*noun\=\"(.*)\".*\>(.*)\</ || line =~ /^\s{2}\<a.*exist="(\d+)".*noun\=\"(.*)\".*\>(.*)\</
+		if line =~ /^\s{2}(an?|the|some).*exist="(\d+)".*noun\=\"(.*)\".*\>(.*)\</
+			container_item[number_container] = $2
+			noun = $3
+			name = $4
+		elsif line =~ /^\s{2}\<a.*exist="(\d+)".*noun\=\"(.*)\".*\>(.*)\</
+			container_item[number_container] = $1
+			noun = $2
+			name = $3
+		end
+		if container_item[number_container] == container_item[0]
+			container_item = Array.new
+			should_register_containers = Array.new
+			number_container = 0
+			container_item[number_container] = $2
+		end
+		should_register_containers[number_container] = true
+		current_stow_container = container_item[number_container]
+		container_line[number_container] = line
+		if noun =~ gems || noun =~ food || noun =~ ammo || noun =~ scrolls || noun =~ wands || noun =~ skins || noun =~ boxes
+			should_register_containers[number_container] = nil
+		elsif name =~ junk || name =~ herbs || name =~ reagents || name =~ alchemy || name =~ notes || name =~ cursed || name =~ magic || name =~ lm || name =~ misc
+			should_register_containers[number_container] = nil
+		end
+		number_container += 1
+	elsif line =~ /^\s{6}\<a.*exist="(\d+)".*noun\=\"(.*)\".*\>(.*)\</ || line =~ /^\s{6}(an?|the|some).*exist="(\d+)".*noun\=\"(.*)\".*\>(.*)\</
+		if line =~ /^\s{6}\<a.*exist="(\d+)".*noun\=\"(.*)\".*\>(.*)\</
+			item[number_item] = $1
+			noun = $2
+			name = $3
+		elsif line =~ /^\s{6}(an?|the|some).*exist="(\d+)".*noun\=\"(.*)\".*\>(.*)\</
+			item[number_item] = $2
+			noun = $3
+			name = $4
+		end
+		should_register_items[number_item] = true
+		stow_container[number_item] = current_stow_container
+		item_line[number_item] = line
+		if noun =~ gems || noun =~ food || noun =~ ammo || noun =~ scrolls || noun =~ wands || noun =~ skins || noun =~ boxes
+			should_register_items[number_item] = nil
+		elsif name =~ junk || name =~ herbs || name =~ reagents || name =~ alchemy || name =~ notes || name =~ cursed || name =~ magic || name =~ lm || name =~ misc
+			should_register_items[number_item] = nil
+		end
+		number_item += 1
+	elsif line =~ /\((\d+) items? displayed\.\)/
+		number_of_items = $1.to_i
+		break
+	end
+end
+
+time_to_finish = number_of_items * 0.1
+
+respond "--------------------"
+respond "--------------------"
+respond "--------------------"
+respond "The more items you are carrying the longer this script will take to run. You have #{number_of_items} on you, it could take up to #{time_to_finish} seconds to finish."
+respond "--------------------"
+respond "--------------------"
+respond "--------------------"
+
+number_container = 0
+number_item = 0
+
+loop{
+	waitrt?
+	break if container_item[number_container] == nil
+	if script.vars[1] =~ /reg/
+		if container_line[number_container] =~ /\(registered\)/
+			fput "remove ##{container_item[number_container]}"
+			fput "register ##{container_item[number_container]}"
+			if (script.vars[1] =~ /mark/ || script.vars[2] =~ /mark/) && container_line[number_container] !~ /\(marked\)/
+				fput "mark ##{container_item[number_container]}"
+			end
+			fput "wear ##{container_item[number_container]}"
+			sleep 0.2
+			waitrt?			
+		end
+	else
+		if (container_line[number_container] !~ /\(registered\)/ && should_register_containers[number_container]) || script.vars[1] == "all"
+			fput "remove ##{container_item[number_container]}"
+			fput "register ##{container_item[number_container]}"
+			if (script.vars[1] =~ /mark/ || script.vars[2] =~ /mark/) && container_line[number_container] !~ /\(marked\)/
+				fput "mark ##{container_item[number_container]}"
+			end
+			fput "wear ##{container_item[number_container]}"
+			sleep 0.2
+			waitrt?
+		end
+	end
+	number_container += 1
+	sleep 0.1
+}
+
+loop{
+	waitrt?
+	break if item[number_item] == nil
+	if script.vars[1] =~ /reg/
+		if item_line[number_item] =~ /\(registered\)/
+			fput "get ##{item[number_item]}"
+			fput "register ##{item[number_item]}"
+			if (script.vars[1] =~ /mark/ || script.vars[2] =~ /mark/) && item_line[number_item] !~ /\(marked\)/
+				fput "mark ##{item[number_item]}"
+			end
+			fput "put ##{item[number_item]} in ##{stow_container[number_item]}"
+		end
+	else
+		if (item_line[number_item] !~ /\(registered\)/ && should_register_items[number_item]) || script.vars[1] == "all"
+			fput "get ##{item[number_item]}"
+			fput "register ##{item[number_item]}"
+			if (script.vars[1] =~ /mark/ || script.vars[2] =~ /mark/) && item_line[number_item] !~ /\(marked\)/
+				fput "mark ##{item[number_item]}"
+			end
+			fput "put ##{item[number_item]} in ##{stow_container[number_item]}"
+		end
+	end
+	number_item += 1
+	sleep 0.1
+}
+
+echo "All done."

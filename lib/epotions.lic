@@ -1,0 +1,46 @@
+=begin 
+  Enchanting potion reference list based on the wiki
+  ;epotions wide  -- more verbose information
+  
+    author: Felarion
+      game: Gemstone
+      tags: enchanting, reference, potions, 925, wizard
+   version: 0.1
+  required: Lich >= 4.6.0
+  changelog:
+    0.1 (2018-03-22): initial upload.
+=end
+
+if script.vars[0] == "wide"
+  respond "+----------+-------------------+------------+------------+--------+---------------+------------+------+"
+  respond "|  Potion  |   From Enchant    | Aura Color | To Enchant | Cycles | Average Cycle | Pour Bonus | Cost |"
+  respond "+----------+-------------------+------------+------------+--------+---------------+------------+------+"
+  respond "| Sisfu    | 0x-5x (+0 to +25) | Varies     | 1x-6x      | Varies | Varies        |            |      |"
+  respond "| Rohnuru  | 0x (0)            | None       | 1x         | 1      | 1 day         |          0 | 3.5k |"
+  respond "| Rohnuru  | 1x (+1 to +5)     | Red        | 2x         | 2      | 2 days        |          0 | 3.5k |"
+  respond "| Duqnuru  | 2x (+6 to +10)    | Orange     | 3x         | 3      | 3 days        |         15 | 5.5k |"
+  respond "| Duqnuru  | 3x (+11 to +15)   | Yellow     | 4x         | 4      | 4 to 5 days   |         15 | 5.5k |"
+  respond "| Dirtokh  | 4x (+16 to +20)   | Green      | 5x         | 5      | 5 to 7 days   |         25 | 10k  |"
+  respond "| Dirtokh  | 5x (+21 to +25)   | Blue       | 6x         | 6      | 6 to 9 days   |         25 | 10k  |"
+  respond "| Mirtokh  | 6x (+26 to +30)   | Indigo     | 7x         | 7      | 11 to 17 days |         30 | 35k  |"
+  respond "| Bromin   | 7x (+31 to +35)   | Violet     | 8x         | 8      | 9 days        |            |      |"
+  respond "| Aleteh   | 8x (+36 to +40)   | Copper     | 9x         | 9      | Unknown       |            |      |"
+  respond "| Grenshol | 9x (+41 to +45)   | Silver     | 10x        | 10     | Unknown       |            |      |"
+  respond "+----------+-------------------+------------+------------+--------+---------------+------------+------+"
+else
+  respond "+----------+-------+--------+-------+--------+-----------+-------+------+"
+  respond "|  Potion  | From  |  Aura  |  To   | Cycles |   Days    | Bonus | Cost |"
+  respond "+----------+-------+--------+-------+--------+-----------+-------+------+"
+  respond "| Sisfu    | 0x-5x | Varies | 1x-6x | Varies | Varies    |       |      |"
+  respond "| Rohnuru  | 0x    | None   | 1x    | 1      | 1         |     0 | 3.5k |"
+  respond "| Rohnuru  | 1x    | Red    | 2x    | 2      | 2         |     0 | 3.5k |"
+  respond "| Duqnuru  | 2x    | Orange | 3x    | 3      | 3         |    15 | 5.5k |"
+  respond "| Duqnuru  | 3x    | Yellow | 4x    | 4      | 4 to 5    |    15 | 5.5k |"
+  respond "| Dirtokh  | 4x    | Green  | 5x    | 5      | 5 to 7    |    25 | 10k  |"
+  respond "| Dirtokh  | 5x    | Blue   | 6x    | 6      | 6 to 9    |    25 | 10k  |"
+  respond "| Mirtokh  | 6x    | Indigo | 7x    | 7      | 11 to 17  |    30 | 35k  |"
+  respond "| Bromin   | 7x    | Violet | 8x    | 8      | 9         |       |      |"
+  respond "| Aleteh   | 8x    | Copper | 9x    | 9      |           |       |      |"
+  respond "| Grenshol | 9x    | Silver | 10x   | 10     |           |       |      |"
+  respond "+----------+-------+--------+-------+--------+-----------+-------+------+"
+end

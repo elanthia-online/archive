@@ -1,0 +1,14 @@
+hide_me
+silence_me
+
+def doarenadismiss()
+
+	if (checkroom == "[Duskruin Arena, Dueling Sands]" and !(Spell[9607].active?) and checkrt == 0)
+		GameObj.npcs.each{ |monster| fput "dismiss #{monster.noun}" if monster.status =~ /dead/	}
+        end
+
+end
+
+
+	loop{doarenadismiss 
+	pause "0.1s"}

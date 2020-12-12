@@ -1,0 +1,143 @@
+=begin
+Author: Athias
+
+=end
+
+def go_sell_stuff()
+  # Go to locksmith exchange
+  start_script 'go2', ['20727']
+  wait_while {running? 'go2'}
+  sleep 0.5
+
+  # exchange boxes
+  start_script 'exchange'
+  wait_while {running? 'exchange'}
+  sleep 0.5
+
+  # Go to FWI
+  start_script 'go2', ['3668']
+  wait_while {running? 'go2'}
+  sleep 0.5
+  
+  # Sell Loot
+  start_script 'sloot', ['sell']
+  wait_while {running? 'sloot'}
+  sleep 0.5
+  
+  start_script 'go2', ['20239']
+  wait_while {running? 'go2'}
+  sleep 0.5
+end
+
+def join_healer()
+  # Join nexusuhealbot
+  multifput "group open", "join nexushealbot"
+  sleep 0.5
+end
+
+def heal_up()
+
+  # Get the healbot to heal you
+  6.times {
+    if XMLData.injuries.any? { |a,h| h['wound'] > 0 } and checkpcs.include?('Nexushealbot')
+      sleep 10
+      if XMLData.injuries.any? { |a,h| h['wound'] > 0 } and checkpcs.include?('Nexushealbot')
+        fput "poke nexushealbot"
+      end
+    else
+      break
+    end
+  }
+
+  # Check
+  if XMLData.injuries.any? { |a,h| h['wound'] > 0 }
+    start_script 'useherbs'
+    wait_while {running? 'useherbs'}
+    sleep 0.5
+  end
+end
+
+def cast_group_spells()
+
+  # Cast all group spells
+  group_spells = [ "419", "611", "911" ]
+
+  group_spells.each { |cur_spell|
+    if Spell[cur_spell].known?
+      if ! Spell[cur_spell].affordable?
+        wait_until("waiting for mana...") { Spell[cur_spell].affordable? }
+      end
+      cast(cur_spell)
+      sleep 0.5
+      waitcastrt?
+    end
+  }
+
+  # Give disks to everyone
+  if Spell[511].known?
+    start_script 'diskus_shat'
+    wait_while {running? 'diskus_shat'}
+    sleep 0.5
+  end
+end
+
+def bravery_enhancive()
+
+  if Spell[211].timeleft <= 60
+    2.times {
+      if ! Spell[211].affordable?
+        wait_until("waiting for mana...") { Spell[211].affordable? }
+      end
+      dothistimeout "incant 211", 3, /You trace a sign while petitioning the spirits to bestow their aid with the Bravery spell/
+      sleep 0.5
+      waitcastrt?
+    }
+  elsif Spell[211].timeleft <= 180
+    if ! Spell[211].affordable?
+      wait_until("waiting for mana...") { Spell[211].affordable? }
+    end
+    dothistimeout "incant 211", 3, /You trace a sign while petitioning the spirits to bestow their aid with the Bravery spell/
+    sleep 0.5
+    waitcastrt?
+  end
+end
+
+def beg_for_spells()
+
+  fput "act just nudged you"
+  # Beg for spells
+  #start_script 'heal_spellup'
+  #wait_while {running? 'heal_spellup'}
+  #sleep 0.5
+end
+
+def shaggle()
+  # Run shaggle
+  start_script 'shaggle'
+  wait_while {running? 'shaggle'}
+end
+
+def bless_wraps()
+  get_glove = dothistimeout "remove my gauntlets", 3, /You remove some leather gauntlets from your hands.|Remove what?/
+  if get_glove =~ /You remove some leather gauntlets from your hands./
+    dothistimeout "whisper alfred bless", 5, /A brilliant shower of sparks bursts from your leather gauntlets|A searing white light enfolds your leather boots/
+  end
+  fput "wear my gauntlets"
+
+  get_boots = dothistimeout "remove my boots", 3, /You take some leather boots off your feet.|Remove what?/
+  if get_boots =~ /You take some leather boots off your feet./
+    dothistimeout "whisper alfred bless", 5, /A brilliant shower of sparks bursts from your leather gauntlets|A searing white light enfolds your leather boots/
+  end
+  fput "wear my boots"
+end
+
+# Expected Standard Order
+go_sell_stuff
+join_healer
+heal_up
+#cast_group_spells
+#bravery_enhancive
+beg_for_spells
+shaggle
+#gimme_water_walking
+#bless_wraps

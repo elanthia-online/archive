@@ -1,0 +1,108 @@
+=begin
+
+	Celerity Upkeep
+	
+	Group use Fuction - ;Celerity2 
+	Specific People Function - ;Celerity2 <player name> <Player Name> etc
+	Single / Multi Target - ;Celerity 2 <player names>
+	
+	name: Celerity2
+	author: Glaves
+	Version: 1.2b
+	tags: 506, Celerity, wizard, haste
+	
+	Fixed group version not working if you were not the leader
+	The script will now properly work if you are not the leader
+	
+	Big thanks to GSF - Tykus for helping me troubleshoot everything
+	
+	
+	
+=end
+
+
+def getTargetSpells(target)	
+    data = LNet.get_data(target, 'spells')
+
+    spell_data = nil
+
+    if data.nil? || data==false
+        spell_data = nil;
+    else
+        spell_data = Hash.new
+
+        data.each_pair{|s,t|
+            spell_data[s] = t;
+        }
+    end
+end
+
+def currentGroup
+    done  = false
+    group = Array.new
+
+    action = proc { |server_string|
+        if server_string.strip.length == 0
+            nil
+            next
+        end
+
+        if server_string =~ /^<a exist="-\d+" noun="(.*)">(?:.*)<\/a> is (?:the leader|also a member) of your group\./
+            group.push($1)
+            nil
+        elsif server_string =~ /^<a exist="-\d+" noun="(.*)">(?:.*)<\/a> is following you\./
+            group.push($1.to_s)
+            nil
+        elsif server_string =~ /Your group status is currently/
+            nil
+
+        elsif server_string =~ /You are not currently in a group/
+            nil
+
+        elsif server_string =~ /<prompt/
+            done = true
+            DownstreamHook.remove('Group_hook')
+            server_string
+
+        elsif server_string =~ /GROUP HELP/
+            done = true
+            DownstreamHook.remove('Group_hook')
+            nil
+
+        else
+            server_string
+        end
+    }
+
+    DownstreamHook.add('Group_hook', action)
+    silence_me unless undo_silence = silence_me
+    put 'group'
+    silence_me if undo_silence
+    wait_until { done }
+    return(group);
+end
+ 
+	if script.vars[1]
+		group = script.vars[0].split
+	else
+		group = currentGroup()
+	end
+	
+group.each{ |m|
+  cast(506,(m))
+}
+
+
+loop{
+
+  sleep 30
+  group.each{|m|
+
+        spells = getTargetSpells(m)
+
+        if ( spells['598'].nil?) && ! ( spells['506'])
+        cast(506,(m))
+        waitcastrt?
+    end
+    }
+}

@@ -1,0 +1,45 @@
+=begin
+    Sample ;tdusk custom attack routine
+    To be used with ;tdusk and the following setting for it:
+
+    ;e echo UserVars.tdusk[:attack_script] = true
+
+    Will need to rename script to:
+        <YOUR_CHAR_NAME>-duskattack.lic
+
+    See ;tdusk help
+    For additional setup/help info.
+
+       todo: unsure
+     author: Tysong (horibu on PC), original Nylis
+       name: Tysong-duskattack
+       tags: duskruin, arena, dusk ruin, tdusk
+    version: 1.0
+
+    changelog:
+        1.0 (2019-08-06)
+             Sample upload of a custom routine
+=end
+
+
+GameObj.npcs.each { |npc|
+	#echo "custom script"
+	waitrt? if !(npc.status =~ /dead|gone/)
+	fput "tap" if (Array[5,10,15,20,25].include? UserVars.tdusk[:wave_number]) && Spell[909].active?
+	waitcastrt? if !(npc.status =~ /dead|gone/)
+	fput "incant 917 fire" if (Spell[917].affordable?) and npc.name !~ /crimson|fire/ and !(npc.status =~ /dead|gone/) && (Array[5,10,15,20,25].include? UserVars.tdusk[:wave_number])
+	fput "incant 917 cold" if (Spell[917].affordable?) and npc.name =~ /crimson|fire/ and !(npc.status =~ /dead|gone/) && (Array[5,10,15,20,25].include? UserVars.tdusk[:wave_number])
+	waitrt? if !(npc.status =~ /dead|gone/)
+	waitcastrt? if !(npc.status =~ /dead|gone/)
+	pause 0.5 if (checkmana > 170 and UserVars.tdusk[:wave_number] == 25) and !(npc.status =~ /dead|gone/)
+	Spell[950].cast('910 910 910 910 910 910') if (checkmana > 170 and UserVars.tdusk[:wave_number] == 25)
+	waitrt? if !(npc.status =~ /dead|gone/)
+	waitcastrt? if !(npc.status =~ /dead|gone/)
+	Spell[515].cast if Spell[515].affordable? and !Spell[599].active? and !Spell[597].active? and !Spell[515].active?
+	while !(npc.status =~ /dead|gone/) && !dead?
+		multifput "stance offensive", "incant 903", "stance defensive" if Spell[903].affordable? and npc.name =~ /crimson|fire/ and !(npc.status =~ /dead|gone/) and checkrt == 0 and checkcastrt == 0 && UserVars.tdusk[:high_ds] == false
+		multifput "stance offensive", "incant 903 evoke", "stance defensive" if Spell[903].affordable? and !(npc.name =~ /crimson|fire|troll/) and !(npc.status =~ /dead|gone/) and checkrt == 0 and checkcastrt == 0 && UserVars.tdusk[:high_ds] == false
+		multifput "stance offensive", "incant 906", "stance defensive" if Spell[906].affordable? and !(npc.name =~ /crimson|fire/) and npc.name =~ /troll/ and !(npc.status =~ /dead|gone/) and checkrt == 0 and checkcastrt == 0 && UserVars.tdusk[:high_ds] == false
+		pause 0.25 if !(npc.status =~ /dead|gone/)
+	end
+}

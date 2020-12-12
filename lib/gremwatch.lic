@@ -1,0 +1,13 @@
+#
+# 410 gremlocks as they enter rooms in the aqueducts
+#
+# author: Glaves
+# tags: gremlocks, otf, hunting, 410, ewave
+
+
+loop{
+waitfor "Faint sounds of footsteps can be heard" , "gremlock entered the room", "A gremlock dashes in, an insolent sneer spread across her face" , "A gremlock just climbed down a hole" , "A pebble flies in and skips along the floor drawing your attention" , "A gremlock just climbed up a hole" , "A gremlock dashes in" , "A gnarled being just came shuffling in" , "A gnarled being strides in with a snort of derision" , "Elongated shadows dissolve revealing a gremlock"
+waitrt?
+waitcastrt?
+Spell[410].cast
+}

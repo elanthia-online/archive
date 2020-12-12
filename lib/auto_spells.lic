@@ -1,0 +1,13 @@
+#Automated spells.
+
+hide_me
+
+loop {
+	line = get
+	if line =~ /You feel at full magical power again./
+		fput "infuse 1"
+		start_script ("waggle")
+	elsif line =~ /Your magic fizzles ineffectually./
+		kill_script ("waggle")
+	end
+}

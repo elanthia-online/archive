@@ -1,0 +1,31 @@
+=begin
+This will report your Room number and town to LNet help with a message describing what kind of help you need.
+Ex: ;needhelp I'm dead
+Ex2: ;needhelp We could use a cleric
+Ex3: ;needhelp I'm going to die! Heeelp!
+Based on rrdeathreport.
+-Veni
+=end
+
+unless $SAFE == 0
+        respond "#{script.name} must be trusted to work"
+        exit
+end
+
+send_channel = 'help'
+msgtosend = script.vars[0]
+if msgtosend == nil
+	msgtosend = "I need help"
+end
+towns={ 'rr' => "River's Rest", 'en'=> "Ta'Illistim", 'vo' => 'Solhaven', 'wl' => "Wehnimer's Landing", 'ti' => "Teras Isle", 'imt' => "Icemule Trace", 'isle_of_the_four_winds' => 'FWI', } 
+
+room = Room.current.id
+echo room
+if Room.current.id == 4
+	LNet.send_message(attr={'type'=>'channel', 'channel'=>send_channel}, "[#{msgtosend}] Location: #{XMLData.room_title} (unmapped) - PCS: #{GameObj.pcs.join(', ')} NPCS: #{GameObj.npcs.join(', ')}")
+	else
+	LNet.send_message(attr={'type'=>'channel', 'channel'=>send_channel}, "[#{msgtosend}] Location: #{Room[room].title} (#{room}) in #{towns[Room.current.map_name.slice(/[^-]+/)]} - PCS: #{GameObj.pcs.join(', ')} NPCS: #{GameObj.npcs.join(', ')}")
+end
+fput "group open"
+
+

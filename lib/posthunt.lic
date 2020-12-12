@@ -1,0 +1,42 @@
+=begin
+Author: Athias
+
+=end
+
+# Specific for bigshot group hunting
+fput "disband group"
+pause 5
+fput "group open"
+pause 1
+
+# Go to FWI
+fput "turn my armband"
+pause 1
+start_script 'go2', ['3668']
+wait_while {running? 'go2'}
+pause 1
+
+# Sell Loot
+start_script 'sloot', ['sell']
+wait_while {running? 'sloot'}
+pause 1
+
+# Go back from whence you came
+fput "turn my armband"
+pause 1
+start_script 'go2', ['20239']
+wait_while {running? 'go2'}
+pause 1
+
+# Join Tyrean
+multifput "group open", "join Tyrean"
+pause 1
+
+# Check for healing
+start_script 'heal_spellup'
+wait_while {running? 'heal_spellup'}
+pause 1
+
+# Run shaggle
+start_script 'shaggle'
+wait_while {running? 'shaggle'}

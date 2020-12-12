@@ -1,0 +1,110 @@
+=begin
+Author: Athias
+
+=end
+
+def go_sell_stuff()
+  # Go to FWI
+  fput "turn my armband"
+  sleep 0.5
+  start_script 'go2', ['3668']
+  wait_while {running? 'go2'}
+  sleep 0.5
+  
+  # Sell Loot
+  start_script 'sloot', ['sell']
+  wait_while {running? 'sloot'}
+  sleep 0.5
+  
+  # Go back from whence you came
+  fput "turn my armband"
+  sleep 0.5
+end
+
+def go2_nexus()
+  start_script 'go2', ['20239']
+  wait_while {running? 'go2'}
+  sleep 0.5
+end
+
+def join_healer()
+  # Join nexusuhealbot
+  multifput "group open", "join nexushealbot"
+  sleep 0.5
+end
+
+def heal_up()
+
+  # Get the healbot to heal you
+  6.times {
+    if XMLData.injuries.any? { |a,h| h['wound'] > 0 } and checkpcs.include?('Nexushealbot')
+      sleep 10
+      if XMLData.injuries.any? { |a,h| h['wound'] > 0 } and checkpcs.include?('Nexushealbot')
+        fput "poke nexushealbot"
+      end
+    else
+      break
+    end
+  }
+
+  # Check
+  if XMLData.injuries.any? { |a,h| h['wound'] > 0 }
+    start_script 'useherbs'
+    wait_while {running? 'useherbs'}
+    sleep 0.5
+  end
+end
+
+def cast_group_spells()
+
+  # Cast all group spells
+  group_spells = [ "419", "611", "911" ]
+
+  group_spells.each { |cur_spell|
+    if Spell[cur_spell].known?
+      if ! Spell[cur_spell].affordable?
+        wait_until("waiting for mana...") { Spell[cur_spell].affordable? }
+      end
+      cast(cur_spell)
+      sleep 0.5
+      waitcastrt?
+    end
+  }
+
+  # Give disks to everyone
+  if Spell[511].known?
+    start_script 'diskus_shat'
+    wait_while {running? 'diskus_shat'}
+    sleep 0.5
+  end
+end
+
+def beg_for_spells()
+
+  # Beg for spells
+  start_script 'heal_spellup'
+  wait_while {running? 'heal_spellup'}
+  sleep 0.5
+end
+
+def shaggle()
+  # Run shaggle
+  start_script 'shaggle'
+  wait_while {running? 'shaggle'}
+end
+
+def gimme_water_walking()
+  # Ask Alfred for water walking
+  fput "whisper Alfred water walking"
+end
+
+
+# Expected Standard Order
+go_sell_stuff
+go2_nexus
+join_healer
+heal_up
+cast_group_spells
+beg_for_spells
+shaggle
+#gimme_water_walking

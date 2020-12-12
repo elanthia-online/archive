@@ -1,0 +1,29 @@
+#
+# Pause bigshot and attempt to recover your weapon
+# 
+# author: Glaves
+# tags: disarm, disarmed, recover, recovery, bigshot, hunting
+# version 1.0b
+#
+
+while line = get
+
+if line =~ /is knocked from your grasp/
+			pause_script 'stand' if running? 'stand'
+			pause_script 'bigshot' if running? 'bigshot'
+			echo "*******     THIS IS THE ROOM I LOST IT IN  *****************"
+			echo "*******     THIS IS THE ROOM I LOST IT IN  *****************"
+			start_script 'whereami' 
+			echo "*******     THIS IS THE ROOM I LOST IT IN  *****************"
+			echo "*******     THIS IS THE ROOM I LOST IT IN  *****************"
+			waitcastrt?
+			waitrt?
+			Spell[410].cast
+			sleep 3
+			waitrt?
+			multifput "kneel", "recover item"
+			waitrt?
+			unpause_script 'stand' if running? 'stand'
+			unpause_script 'bigshot' if running? 'bigshot'
+end
+end

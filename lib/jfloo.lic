@@ -1,0 +1,625 @@
+=begin
+Jfloo
+
+If you are in West Dragonspine it will take you between Landing and Icemule.
+
+If you are in East Dragonspine it will take you between Ta'Illistim and Ta'Vaalor.
+
+If you specify any argument after ;jfloo it will think you want to turn in gold rings from that argument.
+
+Example: ;jfloo greatcloak     will go to nearest outpost and turn in any gold rings found in greatcloak.
+
+If you just want to use the original features, simply type ;jfloo like always.
+
+Version 2.9 - Contact Jara if any issues, bugs or questions.
+
+=end
+
+version = "Jfloo Version 2.9"
+
+jfloowhere = proc{
+if Room.current.id == nil
+		respond "I'm not currently in a mapped room."
+		respond "Please move rooms and try again."
+		kill_script "jfloo"
+elsif checkarea == "Pinefar Trading Post"
+		respond "I'm in Pinefar, but should be in Icemule."
+		sleep 0.15
+		start_script "go2", [2300]
+		wait_while {running? "go2"}
+elsif checkarea == "Birthing Sands"
+		respond "I'm at the Birthing Sands, but should be in Icemule."
+		if Spell[130].affordable? && Spell[130].known?
+			Spell[130].cast
+			waitcastrt?
+			waitrt?
+			start_script "go2", [2300]
+			wait_while {running? "go2"}
+		elsif !Spell[130].affordable? || !Spell[130].known?
+			echo
+			respond "You are either out of mana or don't know how to fog."
+			respond "Going to swim to town, if you don't want to do this type ;ka ......"
+			respond "Starting the swim in 15 seconds."
+			sleep 15
+			start_script "go2", [2300]
+			wait_while {running? "go2"}
+		end
+
+elsif checkarea == "Icemule Trace"
+	respond "You are in Icemule"
+elsif checkarea == "Wehnimer's Landing"
+	respond "You are in Wehnimer's Landing"
+else
+	respond "I don't know where you are."
+	respond "Attempting to go to town."
+	start_script "go2", ["town"]
+	wait_while {running? "go2"}
+end
+
+}
+
+#Icemule Section
+
+
+useicepass = proc {start_script "go2", ["15619"]
+			wait_while {running? "go2"}
+			dothistimeout "raise my pass", 5, /whirlwind of color subsides/
+			dothistimeout "stow my pass", 5, /You put a/
+			start_script "go2", ["town"]
+			wait_while {running? "go2"}
+			echo
+			respond "You are now in Wehnimer's Landing."
+			respond "Thanks for using Jfloo!"
+			echo
+			kill_script "jfloo"
+
+}
+
+buyicepass = proc {
+
+		start_script "go2", ["bank"]
+		wait_while {running? "go2"}
+		result3 = dothistimeout "withdraw 5000", 5, /carefully records|through the books/
+			if result3 =~ /carefully records/
+			start_script "go2", [8916]
+			wait_while {running? "go2"}
+			dothistimeout "ask half for wehnimer", 5, /says to you/
+			useicepass.call
+			
+			elsif result3 =~ /through the books/
+				echo
+				respond "Not enough money in bank to buy ticket."
+				respond "Try again when you have at least 5000 silvers."
+				echo
+				kill_script "jfloo"
+end
+}
+
+jflooice = proc{
+	echo
+	respond "Welcome #{Char.name} to the Jfloo network."
+	respond "I'm taking you to Wehnimer's Landing."
+	echo
+	sleep 1
+	start_script "go2", ["15619"]
+	wait_while {running? "go2"}
+	result = dothistimeout "get my pass", 5, /You remove|You grab a|Get what\?/
+		if result =~ /You remove|You grab a/
+			result4 = dothistimeout "raise my pass", 5, /whirlwind of color subsides|pass is expired|not valid for departures/
+				if result4 =~ /whirlwind of color subsides/
+					dothistimeout "stow my pass", 5, /You put a/
+					start_script "go2", ["town"]
+					wait_while {running? "go2"}
+					echo
+					respond "You are now in Wehnimer's Landing."
+					respond "Thanks for using Jfloo!"
+					echo
+					kill_script "jfloo"
+				elsif result4 =~ /pass is expired|not valid for departures/
+					dothistimeout "drop my pass", 5, /As you let go/
+					start_script "go2", [8916]
+					wait_while {running? "go2"}
+					dothistimeout "ask half for wehnimer", 5, /says to you/
+					result5 = dothistimeout "ask half for wehnimer", 5, /don\'t have enough|quickly hands you/
+					if result5 =~ /don\'t have enough/
+						buyicepass.call
+					elsif result5 =~ /quickly hands you/
+						useicepass.call
+					end
+				end
+				
+			
+		elsif result =~ /Get what\?/
+			start_script "go2", [8916]
+			wait_while {running? "go2"}
+			dothistimeout "ask half for wehnimer", 5, /says to you/
+			result2 = dothistimeout "ask half for wehnimer", 5, /don\'t have enough|quickly hands you/
+			if result2 =~ /don\'t have enough/
+				buyicepass.call
+			
+			elsif result2 =~ /quickly hands you/
+				useicepass.call
+			end
+		end
+}
+
+
+
+
+
+
+
+#Landing Section
+
+uselandpass = proc {start_script "go2", [8635]
+			wait_while {running? "go2"}
+			dothistimeout "raise my pass", 5, /whirlwind of color subsides/
+			dothistimeout "stow my pass", 5, /You put a/
+			start_script "go2", ["town"]
+			wait_while {running? "go2"}
+			echo
+			respond "You are now in Icemule Trace."
+			respond "Thanks for using Jfloo!"
+			echo
+			kill_script "jfloo"
+
+}
+
+buylandpass = proc {
+
+		start_script "go2", ["bank"]
+		wait_while {running? "go2"}
+		result3 = dothistimeout "withdraw 5000", 5, /carefully records|through the books/
+			if result3 =~ /carefully records/
+			start_script "go2", [8634]
+			wait_while {running? "go2"}
+			dothistimeout "ask clerk for icemule", 5, /says to you|quickly hands/
+			uselandpass.call
+			
+			elsif result3 =~ /through the books/
+				echo
+				respond "Not enough money in bank to buy ticket."
+				respond "Try again when you have at least 5000 silvers."
+				echo
+				kill_script "jfloo"
+end
+}
+
+
+
+
+
+
+
+
+
+
+jflooland = proc{
+	echo
+	respond "Welcome #{Char.name} to the Jfloo network."
+	respond "I'm taking you to Icemule Trace."
+	echo
+	sleep 1
+	start_script "go2", [8635]
+	wait_while {running? "go2"}
+	result = dothistimeout "get my pass", 5, /You remove|You grab a|Get what\?/
+		if result =~ /You remove|You grab a/
+			result4 = dothistimeout "raise my pass", 5, /whirlwind of color subsides|pass is expired|not valid for departures/
+				if result4 =~ /whirlwind of color subsides/
+					dothistimeout "stow my pass", 5, /You put a/
+					start_script "go2", ["town"]
+					wait_while {running? "go2"}
+					echo
+					respond "You are now in Icemule Trace."
+					respond "Thanks for using Jfloo!"
+					echo
+					kill_script "jfloo"
+				elsif result4 =~ /pass is expired|not valid for departures/
+					dothistimeout "drop my pass", 5, /As you let go/
+					start_script "go2", [8634]
+					wait_while {running? "go2"}
+					dothistimeout "ask clerk for icemule", 5, /says to you/
+					result5 = dothistimeout "ask clerk for icemule", 5, /don\'t have enough|quickly hands you/
+					if result5 =~ /don\'t have enough/
+						buylandpass.call
+					elsif result5 =~ /quickly hands you/
+						uselandpass.call
+					end
+				end
+				
+			
+		elsif result =~ /Get what\?/
+			start_script "go2", [8634]
+			wait_while {running? "go2"}
+			dothistimeout "ask clerk for icemule", 5, /says to you/
+			result2 = dothistimeout "ask clerk for icemule", 5, /don\'t have enough|quickly hands you/
+			if result2 =~ /don\'t have enough/
+				buylandpass.call
+			
+			elsif result2 =~ /quickly hands you/
+				uselandpass.call
+			end
+		end
+}
+
+
+#Illistim Section
+
+useillistimpass = proc {start_script "go2", [1276]
+			wait_while {running? "go2"}
+			dothistimeout "raise my pass", 5, /whirlwind of color subsides/
+			dothistimeout "stow my pass", 5, /You put a/
+			start_script "go2", ["town"]
+			wait_while {running? "go2"}
+			echo
+			respond "You are now in Ta'vaalor."
+			respond "Thanks for using Jfloo!"
+			echo
+			kill_script "jfloo"
+
+}
+
+buyillistimpass = proc {
+
+		start_script "go2", ["bank"]
+		wait_while {running? "go2"}
+		result3 = dothistimeout "withdraw 5000", 5, /carefully records|through the books/
+			if result3 =~ /carefully records/
+			start_script "go2", [13169]
+			wait_while {running? "go2"}
+			dothistimeout "ask attend for ta'vaalor", 5, /says to you|quickly hands/
+			useillistimpass.call
+			
+			elsif result3 =~ /through the books/
+				echo
+				respond "Not enough money in bank to buy ticket."
+				respond "Try again when you have at least 5000 silvers."
+				echo
+				kill_script "jfloo"
+end
+}
+
+
+
+jflooillistim = proc{
+	echo
+	respond "Welcome #{Char.name} to the Jfloo network."
+	respond "I'm taking you to Ta'Vaalor."
+	echo
+	sleep 1
+	start_script "go2", [1276]
+	wait_while {running? "go2"}
+	result = dothistimeout "get my pass", 5, /You remove|You grab a|Get what\?|already have/
+		if result =~ /You remove|You grab a|already have/
+			result4 = dothistimeout "raise my pass", 5, /whirlwind of color subsides|pass is expired|not valid for departures/
+				if result4 =~ /whirlwind of color subsides/
+					dothistimeout "stow my pass", 5, /You put a/
+					start_script "go2", ["town"]
+					wait_while {running? "go2"}
+					echo
+					respond "You are now in Ta'Vaalor."
+					respond "Thanks for using Jfloo!"
+					echo
+					kill_script "jfloo"
+				elsif result4 =~ /pass is expired|not valid for departures/
+					dothistimeout "drop my pass", 5, /As you let go|You drop a/
+					start_script "go2", [13169]
+					wait_while {running? "go2"}
+					dothistimeout "ask attend for ta'vaalor", 5, /says to you/
+					result5 = dothistimeout "ask attend for ta'vaalor", 5, /don\'t have enough|quickly hands you/
+					if result5 =~ /don\'t have enough/
+						buyillistimpass.call
+					elsif result5 =~ /quickly hands you/
+						useillistimpass.call
+				
+					end
+				end
+				
+			
+		elsif result =~ /Get what\?/
+			start_script "go2", [13169]
+			wait_while {running? "go2"}
+			dothistimeout "ask attend for ta'vaalor", 5, /says to you/
+			result2 = dothistimeout "ask attend for ta'vaalor", 5, /don\'t have enough|quickly hands you/
+			if result2 =~ /don\'t have enough/
+				buyillistimpass.call
+			
+			elsif result2 =~ /quickly hands you/
+				useillistimpass.call
+			end
+		end
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#Ta'vaalor Section
+
+
+
+
+usevaalorpass = proc {start_script "go2", [13779]
+			wait_while {running? "go2"}
+			dothistimeout "raise my pass", 5, /whirlwind of color subsides/
+			dothistimeout "stow my pass", 5, /You put a/
+			start_script "go2", ["town"]
+			wait_while {running? "go2"}
+			echo
+			respond "You are now in Ta'Illistim."
+			respond "Thanks for using Jfloo!"
+			echo
+			kill_script "jfloo"
+
+}
+
+buyvaalorpass = proc {
+
+		start_script "go2", ["bank"]
+		wait_while {running? "go2"}
+		result3 = dothistimeout "withdraw 5000", 5, /carefully records|through the books/
+			if result3 =~ /carefully records/
+			start_script "go2", [5883]
+			wait_while {running? "go2"}
+			dothistimeout "ask clerk for ta'illistim", 5, /says to you|quickly hands/
+			usevaalorpass.call
+			
+			elsif result3 =~ /through the books/
+				echo
+				respond "Not enough money in bank to buy ticket."
+				respond "Try again when you have at least 5000 silvers."
+				echo
+				kill_script "jfloo"
+end
+}
+
+
+
+
+
+
+jfloovaalor = proc{
+	echo
+	respond "Welcome #{Char.name} to the Jfloo network."
+	respond "I'm taking you to Ta'illistim."
+	echo
+	sleep 1
+	start_script "go2", [13779]
+	wait_while {running? "go2"}
+	result = dothistimeout "get my pass", 5, /You remove|You grab a|Get what\?/
+		if result =~ /You remove|You grab a/
+			result4 = dothistimeout "raise my pass", 5, /whirlwind of color subsides|pass is expired|not valid for departures/
+				if result4 =~ /whirlwind of color subsides/
+					dothistimeout "stow my pass", 5, /You put a/
+					start_script "go2", ["town"]
+					wait_while {running? "go2"}
+					echo
+					respond "You are now in Ta'Illistim."
+					respond "Thanks for using Jfloo!"
+					echo
+					kill_script "jfloo"
+				elsif result4 =~ /pass is expired|not valid for departures/
+					dothistimeout "drop my pass", 5, /As you let go|You drop a/
+					start_script "go2", [5883]
+					wait_while {running? "go2"}
+					dothistimeout "ask clerk for ta'illistim", 5, /says to you/
+					result5 = dothistimeout "ask clerk for ta'illistim", 5, /don\'t have enough|quickly hands you/
+					if result5 =~ /don\'t have enough/
+						buyvaalorpass.call
+					elsif result5 =~ /quickly hands you/
+						usevaalorpass.call
+				
+					end
+				end
+				
+			
+		elsif result =~ /Get what\?/
+			start_script "go2", [5883]
+			wait_while {running? "go2"}
+			dothistimeout "ask clerk for ta'illistim", 5, /says to you/
+			result2 = dothistimeout "ask clerk for ta'illistim", 5, /don\'t have enough|quickly hands you/
+			if result2 =~ /don\'t have enough/
+				buyvaalorpass.call
+			
+			elsif result2 =~ /quickly hands you/
+				usevaalorpass.call
+			end
+		end
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#Start of script
+
+respond "#{version}"
+
+if Room.current.id == nil
+		respond "I'm not currently in a mapped room."
+		respond "Please move rooms and try again."
+		kill_script "jfloo"
+end
+
+if checkright =~ /\b/ && checkleft =~ /\b/
+		respond "You need at least one hand empty to use Jfloo."
+		respond "Please stow something and try again."
+		kill_script "jfloo"
+end	
+
+
+if script.vars[1] == nil
+	goto "OFFICIALJFLOO"
+elsif script.vars[1] =~ /\b/
+	start_script "go2", ["chronomage"]
+	wait_while {running? "go2"}
+	goto "RINGTIME"
+	end
+
+	
+RINGTIME:
+
+result = dothistimeout "look", 3, /Weyneidra|finely\-dressed halfling|Obvious/
+if result =~ /Weyneidra/
+	result2 = dothistimeout "get ring from my #{script.vars[1]}", 3, /You|Get/
+	if result2 =~ /You/
+		result3 = dothistimeout "give my ring to clerk", 3, /silvers less|what would I/
+		if result3 =~ /silvers less/
+		echo
+		respond "Success at getting ring credit."
+		echo
+		goto "RINGTIME"
+		elsif result3 =~ /what would I/
+		echo
+		respond "You are trying to gain credit with an unknown item, stopping the script."
+		echo
+		kill_script "jfloo"
+		end
+	elsif result2 =~ /Get/
+		echo
+		respond "You have no valid rings in #{script.vars[1]} to turn in for credit."
+		echo
+		respond "Thanks for using jfloo."
+		echo
+		kill_script "jfloo"
+	end
+elsif result =~ /finely\-dressed halfling/	
+	result2 = dothistimeout "get ring from my #{script.vars[1]}", 3, /You|Get/
+	if result2 =~ /You/
+		result3 = dothistimeout "give my ring to half", 3, /silvers less|what would I/
+		if result3 =~ /silvers less/
+		echo
+		respond "Success at getting ring credit."
+		echo
+		goto "RINGTIME"
+		elsif result3 =~ /what would I/
+		echo
+		respond "You are trying to gain credit with an unknown item, stopping the script."
+		echo
+		kill_script "jfloo"
+		end
+	elsif result2 =~ /Get/
+		echo
+		respond "You have no valid rings in #{script.vars[1]} to turn in for credit."
+		echo
+		respond "Thanks for using jfloo."
+		echo
+		kill_script "jfloo"
+	end
+elsif result =~ /Obvious/
+echo
+respond "I did not find a valid npc to turn rings into."
+respond "Please contact Jara with the full npc name to fix this region of the world."
+echo
+kill_script "jfloo"
+	
+end
+
+
+
+
+
+OFFICIALJFLOO:
+
+until checkarea =~ /Icemule Trace|Wehnimer\'s|Town Square|Town Square Central|Solhaven|Ta\'Illistim|Ta\'Vaalor|Cysaegir|Zul Logoth/
+jfloowhere.call
+end
+
+
+sleep 1
+
+if checkarea == "Icemule Trace"
+jflooice.call
+end
+
+if checkarea =~ /Wehnimer\'s|Town Square|Town Square Central/
+jflooland.call
+end
+
+if checkarea == "Solhaven"
+echo
+respond "#{Char.name}, I see you're in Solhaven.  Let's go to the Landing, then Icemule."
+echo
+start_script "go2", [228]
+wait_while {running? "go2"}
+jflooland.call
+end
+
+
+if checkarea == "Ta'Illistim"
+jflooillistim.call
+end
+
+if checkarea == "Ta'Vaalor"
+jfloovaalor.call
+end
+
+if checkarea == "Cysaegir"
+echo
+respond "You are in Cysaegir, but we need to go to Ta'Illistim first before Ta'Vaalor."
+echo
+start_script "go2", [188]
+wait_while {running? "go2"}
+jflooillistim.call
+end
+
+
+if checkarea == "Zul Logoth"
+start_script "go2", ["get-silvers=on"]
+wait_while {running? "go2"}
+end
+
+WHERETOGO:
+
+echo
+respond "#{Char.name}, you appear to be in Zul Logoth."
+respond "Jfloo works in both West Dragonspine & East Dragonspine."
+respond "Since you are in the middle of those areas, tell me where you want to go."
+respond "You can say or ;chat to yourself your answer."
+respond "The script will look for many possible matches."
+echo
+respond "Wehnimer's Landing - 228"
+echo
+respond "		Or		"
+echo
+respond "	Ta'illistim - 188"
+echo
+
+loop {
+while line = get
+if line =~ /wehnimer|landing|Landing|228|Wehnimer\'s Landing|wehnimers|Wehnimer|wehnimer\'s/
+	start_script "go2", [228]
+	wait_while {running? "go2"}
+	jflooland.call
+	break
+elsif line =~ /illistim|Ta\'illistim|taillistim|188|Taillistim|ta\'illistim|Illistim/
+	start_script "go2", [188]
+	wait_while {running? "go2"}
+	jflooillistim.call
+	break		
+	end
+end
+}
+
+

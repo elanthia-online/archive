@@ -1,0 +1,2293 @@
+=begin
+
+    SHunt is a standalone hunting script designed to be used in other scripts. It does not include
+    a hunt/rest routine. You can use it with sbounty by download the sbounty-shunt proxy script.
+
+     author: spiffyjr
+       name: SpiffyHunt
+       tags: hunting
+
+    changelog:
+        2020.03.21 - fix defensive before running looter
+        2020.03.18 - commands with "" around them are now stripped properly.
+        2019.01.06 - added gear swapping based on undead
+        2019.08.13 - added script command (e.g., wait,stance offensive,script echo 'foobar')
+        2019.06.26 - added chasing logic
+                     improved wait for attack logic
+                     improved some other stuff I've forgotten
+        2019.06.07 - lots of cleanup.
+                     added smite for UAC
+                     added aiming for UAC
+        2019.01.02 - Happy New Year! Removed SHuntCombat and combined methods to SHunt. Added deprecation notice on use.
+        2018.12.31 - allowed setting no looter (and just using loot verb)
+                   - cleaned up settings a bit (index arrays by number, use 1-index for display)
+        2018.03.07 - first official public release (now with moar docs)
+=end
+# Surgical strike removes <pushBold/>the <a exist="187632484" noun="cerebralite">glistening cerebralite</a><popBold/>'s left eye!
+
+default_settings = {
+  :debug => [false, "enable debug mode (advanced only)"],
+
+  :active_scripts => [[], "scripts that run while hunting"],
+  :aim_parts => [[], "the parts, in order, to aim at when attacking"],
+  :attack_lines => [["wait 20,stance offensive,kill target"], "attack lines to use in for targets"],
+  :bless_with_pure_potion => [false, "if set will attempt to bless using pure potions"],
+  :bless_gear_enable => [false, "if true will swap gear based on targets undead status"],
+  :bless_gear_on => [[], "gear you want to put on when undead detected"],
+  :bless_gear_off => [[], "gear you want to take off when undead detected"],
+  :bless_gear_container => ["", "container to put and get gear from"],
+  :boundaries => [[], "set the wander boundaries"],
+  :buffs => [[], "spells, cmans, etc. to keep active while hunting"],
+  :buffs_skip_cooldown => [false, "will use some buffs during cooldown phase"],
+  :flee_at => [2, "flee when this many creatures are present"],
+  :flee_ignore => [[], 'don\'t count these in flee_at'],
+  :flee_always => [[], "flee anytime you see these"],
+  :hide_move => [false, "hide or stay hidden for movement"],
+  :looter => ["sloot", "looting script to use"],
+  :mstrike_stamina => [0, "mstrike if stamina is above this value, 0 to disable"],
+  :room => ["", "the room to start hunting in"],
+  :slow_mode => [false, "turns on slow movement to annoy people less"],
+  :targets => [[], "targets, e.g., 1.forest troll"],
+  :untargetable => [[], "list of things to never target"],
+  :wait_stance => ["defensive", "stance to use while waiting to be attacked"],
+}
+
+settings = CharSettings.to_hash
+default_settings.each do |k, v|
+  if settings[k].nil?
+    settings[k] = v[0]
+  end
+end
+
+settings.delete_if { |setting, value| default_settings[setting].nil? }
+
+class SHuntHooks
+  @@target_replace = '<pushBold\/>[^<]*<a exist=\"([^"]+)" noun=\"[^"]+\">[^<]+<\/a><popBold\/>(?:\'s|\')?'
+
+  def initialize(shunt)
+    @shunt = shunt
+    @hooks = []
+  end
+
+  def install(name, hook)
+    name = "shunt-hook-" + name
+
+    @hooks.push(name)
+    DownstreamHook.add(name, hook)
+  end
+
+  def clean
+    hooks.each { |name| DownstreamHook.remove(name) }
+  end
+
+  def install_move_watcher
+    action = proc do |line|
+      if line =~ /<pushBold\/>(?:An?|The) <a exist="(\d+)" noun="[^"]+">[^<]+<\/a><popBold\/>[^<]+<d>(\w+)<\/d>/
+        data = SHuntTarget.get_target_data($1)
+        data[:last_move] = $2
+      end
+
+      line
+    end
+
+    self.install("move_watcher", action)
+  end
+
+  def install_wait_watcher
+    extra_messages = [
+      "{{target}} suddenly strikes at you",
+      "{{target}} lifts {{target}} huge foot up and slams it into the (?:ground|floor), shaking everything violently!",
+      "{{target}} curls {{target}} form into a large boulder, and the boulder begins to move, quickly gaining momentum!",
+      "{{target}} leaps towards you, but misses and sprawls to the ground!",
+      "{{target}} stands back up",
+      "{{target}} drools with",
+      "{{target}} searches",
+      "{{target}} jumps up on you,",
+      "{{target}} picks up",
+      "{{target}} forages around for a moment, managing",
+      "{{target}} .* fumbles helplessly",
+      "{{target}} lashes .* tail out at your legs",
+      "With a fluid whirl, {{target}} plants .* firmly into the ground near you and jerks the weapon sharply sideways",
+      "tail strikes the ground, raising a flurry of sparks!",
+      "You feel your resistance melt away!",
+      # Rift Crawlers
+      "huge tail and slams it into the",
+      "stares upward for a moment, seemingly focusing on a distant point",
+    ]
+
+    hidden_messages = [
+      "{{target}} peers around suspiciously",
+      "{{target}} sniffs around looking for something",
+      "{{target}} searches",
+      "{{target}} twitches",
+      "{{target}} lies close to the floor",
+      "{{target}} swivels",
+      "{{target}} mumbles something to",
+      "{{target}} finishes the chant and gestures into the air",
+      "{{target}} flesh wounds regenerate slowly",
+      "{{target}} scans its surroundings",
+      "{{target}} shifts around, looking indecisive",
+      "{{target}} casts her glance rapidly about the room",
+    ]
+
+    targets = {}
+
+    register = proc do |id|
+      data = SHuntTarget.get_target_data(id)
+      data[:last_action] = Time.now.to_f
+    end
+
+    action = proc do |line|
+      # Generic attack line
+      if line =~ /<pushBold\/>(?:The|An?) <a exist="(-?\d+)" noun="(\w+)">[^<]+<\/a><popBold\/>.*\byou\b/i
+        register.call($1)
+        next line
+      end
+
+      # Hidden searches
+      if hidden?
+        hidden_messages.each do |message|
+          if line =~ /#{message.gsub("{{target}}", @@target_replace)}/
+            register.call($1)
+            next line
+          end
+        end
+      end
+
+      # Extra attack lines
+      extra_messages.each do |message|
+        if line =~ /#{message.gsub("{{target}}", @@target_replace)}/
+          register.call($1)
+          next line
+        end
+      end
+
+      line
+    end
+
+    self.install("wait_watcher", action)
+  end
+
+  def install_target_status
+    # Messages that have the target.id included in the string
+    messages = {
+      :kneeling => [
+        "{{target}} is knocked to {{target}} knees!",
+      ],
+      :prone => [
+        "{{target}}(?: screams and)? falls to the .* leg!",
+        '{{target}} .* (?:crashes|collapses) to the .* leg\.',
+        "{{target}} is knocked to the .*",
+        "{{target}} is buffeted by the force and is knocked to the .*",
+        "{{target}} slumps to the .*",
+        "{{target}} screams loudly as it drops to the",
+        "{{target}} moans loudly as it drops to the .* in agony",
+        "{{target}} collapses to the .*",
+        "{{target}} falls to the .*",
+        "{{target}} glances down at .* mangled .* falls over",
+      ],
+      :sitting => [
+        '(?:<pushBold\/>)?The (?:<pushBold\/>)?<a exist="(\d+)" noun=".*">.*<\/a><popBold\/> is knocked into a sitting position!',
+      ],
+      :standing => [
+        '{{target}} slowly works (?:its|his|her) way back into a standing position\.',
+        '{{target}} regains his footing, standing up with a grunt\.',
+      ],
+      :sleeping => [
+        "{{target}} goes limp as .* is rendered unconscious!",
+      ],
+      :webbed => [
+        '{{target}} is firmly webbed in place\.',
+      ],
+      "" => [
+        "The webbing around {{target}} catches fire!",
+      ],
+    }
+
+    # Messages that have a duration, start, and stop
+    timed_messages = {
+      :assault => {
+        :duration => 15,
+        :start => [
+          "{{target}}, your awareness of .* physical condition",
+        ],
+        :end => [
+          "The empathic presence you planted within {{target}} exhausts itself.",
+          "{{target}} defeats your assault!",
+        ],
+      },
+      :holding => {
+        :duration => 60,
+        :start => [
+          "{{target}} appears to be distracted.",
+        ],
+        :end => [
+          "{{target}} shakes off the effects of the holding song.",
+        ],
+      },
+      :lullabye => {
+        :duration => 60,
+        :start => [
+          "{{target}} relaxes and sits down, entranced by the soothing melody.",
+          "{{target}} eyes flutter slightly, and {{target}} appears dazed.",
+          "{{target}} falls to the ground in a deep slumber.",
+          "{{target}} slips into a deep slumber.",
+          "{{target}} seems mesmerized by the tune.",
+          "{{target}} is already under the effects of a lullabye.",
+        ],
+        :end => [
+          "{{target}} shakes off the effects of the lullabye.",
+        ],
+      },
+      :feint => {
+        :duration => 10,
+        :start => ["{{target}} buys the ruse and twists awkwardly to block the blow that never came!"],
+        :end => [],
+      },
+    }
+
+    action = proc do |line|
+      messages.each do |status, regexes|
+        if regexes.any? { |regex| line =~ /#{regex.gsub("{{target}}", @@target_replace)}/ }
+          target_data = SHuntTarget.get_target_data($1)
+          target_data[:status] = status.to_s
+          break
+        end
+      end
+
+      timed_messages.each do |status, data|
+        if data[:start].any? { |regex| line =~ /#{regex.gsub("{{target}}", @@target_replace)}/ }
+          target_data = SHuntTarget.get_target_data($1)
+          target_data[:timed][status] = Time.now.to_i + data[:duration].to_i
+        elsif data[:end].any? { |regex| line =~ /#{regex.gsub("{{target}}", @@target_replace)}/ }
+          target_data = SHuntTarget.get_target_data($1)
+          target_data[:timed][status] = 0
+        else
+          next
+        end
+
+        break
+      end
+
+      line
+    end
+
+    self.install("target_status", action)
+
+    # Messages with no indication of the target
+    target_messages = {
+      :prone => [
+        "(?:He|She|It) is knocked to the ground",
+      ],
+    }
+
+    target_status_target = nil
+    action2 = proc do |line|
+      if line =~ /You (?:(?:thrust with|swing) an? .* at|attempt to (?:punch|grapple|jab)) <pushBold\/>(?:a|an) <a exist="(\d+)"/i
+        target_status_target = $1
+      elsif target_status_target
+        target_messages.each do |status, regexes|
+          if regexes.any? { |regex| line =~ /#{regex}/ }
+            target_data = SHuntTarget.get_target_data($1)
+            target_data[:status] = status.to_s
+            break
+          end
+        end
+      elsif line =~ /roundtime: \d+/i
+        target_status_target = nil
+      end
+
+      line
+    end
+
+    self.install("target_status_2", action2)
+  end
+
+  # Tracks critical wounds per location so that aiming can modify as necessary.
+  # Only track ranks 1-3, fatals are not necessary
+  def install_crit_tracker
+    locations = {
+      # Scratches its left eye.
+      #    Slash across right eye!
+      # Hope the left is working.
+      "eye" => [
+        # puncture
+        { rank: 1, regex: /Minor strike under the (left|right) eye, that was close/ },
+        { rank: 2, regex: /Well aimed shot almost removes an eye/ },
+        { rank: 3, regex: /Surgical strike removes {{target}} (left|right) eye/ },
+        { rank: 3, regex: /Slash across (right|left) eye/ },
+
+        # slash
+        { rank: 1, regex: /Slashing strike near forehead nicks an eyebrow/ },
+        { rank: 2, regex: /Gash to {{target}} (left|right) eyebrow/ },
+        { rank: 2, regex: /Scratches {{target}} (left|right) eye/ },
+        { rank: 3, regex: /(Left|Right) eye lost!/ },
+      ],
+      "neck" => [
+        # puncture
+        { rank: 1, regex: /Minor strike to neck/ },
+        { rank: 2, regex: /Well placed shot to the neck/ },
+        { rank: 2, regex: /Strike just below the jaw, nice shot to the neck/ },
+        { rank: 3, regex: /Pierced through neck, a fine shot/ },
+        { rank: 3, regex: /Neck skewered, sliding past the throat and spine/ },
+
+        # slash
+        { rank: 1, regex: /Attack hits {{target}} throat but doesn't break the skin/ },
+        { rank: 1, regex: /Strike dents {{target}} larynx/ },
+        { rank: 2, regex: /Deft swing strikes {{target}} neck/ },
+        { rank: 3, regex: /Strong slash to throat nicks a few blood vessels/ },
+        { rank: 3, regex: /Fast slash to {{target}} neck exposes/ },
+      ],
+      "head" => [
+        # puncture
+        { rank: 1, regex: /Glancing strike to the head!/ },
+        { rank: 2, regex: /Nice shot to the head/ },
+        { rank: 2, regex: /Beautiful head shot!/ },
+        { rank: 3, regex: /Strike to temple!/ },
+        { rank: 3, regex: /Beautiful shot pierces skull!/ },
+
+        # slash
+        { rank: 1, regex: /Quick slash catches {{target}} cheek/ },
+        { rank: 1, regex: /Blade slashes across {{target}} face/ },
+        { rank: 2, regex: /Blow to head/ },
+        { rank: 2, regex: /Quick flick of the wrist/ },
+        { rank: 3, regex: /Deep gash and a terrible headache/ },
+      ],
+      "leg" => [
+        # puncture
+        { rank: 1, regex: /Minor puncture to the (left|right) leg/ },
+        { rank: 1, regex: /Strike pierces thigh/ },
+        { rank: 1, regex: /Well aimed shot, punctures calf/ },
+        { rank: 2, regex: /Strike pierces calf/ },
+        { rank: 2, regex: /Well placed shot pierces knee, that hurt/ },
+        { rank: 2, regex: /Great shot penetrates thigh and shatters bone/ },
+        { rank: 3, regex: /Blow shatters knee and severs lower leg/ },
+        { rank: 3, regex: /Strike punctures thigh and shatters femur/ },
+        { rank: 3, regex: /Shot shatters hip and severs (left|right) leg/ },
+
+        # slash
+        { rank: 1, regex: /Slash to {{target}} (right|left) leg hits high/ },
+        { rank: 1, regex: /Banged {{target}} (right|left) shin/ },
+        { rank: 1, regex: /Downward slash across {{target}} (right|left) thigh/ },
+        { rank: 2, regex: /Quick, powerful slash to {{target}} (right|left) knee/ },
+        { rank: 2, regex: /Deep, bloody slash to {{target}} (right|left) thigh/ },
+        { rank: 2, regex: /Quick, powerful slash to {{target}} (right|left) knee/ },
+        { rank: 2, regex: /Strong slash to {{target}} (right|left) leg/ },
+        { rank: 3, regex: /Wild downward slash severs {{target}} (right|left) foot/ },
+        { rank: 3, regex: /Powerful slash! {{target}} (right|left) leg is severed at the knee/ },
+        { rank: 3, regex: /Powerful slash leaves {{target}} without a (right|left) leg/ },
+      ],
+    }
+
+    locations.each { |location_key, entries|
+      entries.each { |entry|
+        entry[:regex] = /#{entry[:regex].to_s.gsub("{{target}}", @@target_replace)}/i
+      }
+    }
+
+    # todo, update this to track the critter being hit
+    action = proc { |line|
+      locations.each { |location, crits|
+        if (crit = crits.find { |c| line =~ /#{c[:regex]}/ })
+          target_id = nil
+          left_or_right = nil
+
+          if $1 =~ /\w+/
+            # check if first match is location
+            left_or_right = $1
+            target_id = $shunt.target.id
+          elsif $1 =~ /\d+/
+            # check if first match is an id
+            target_id = $1
+
+            # did it include a location?
+            left_or_right = $2 if $2
+          else
+            # finally, use the current shunt target id
+            target_id = $shunt.target.id
+          end
+
+          # shouldn't happen, but failsafe
+          next if not target_id
+
+          data = SHuntTarget.get_target_data(target_id)
+
+          # figure out left and right
+          if ["eye", "leg", "hand", "arm"].include?(location)
+            if left_or_right
+              location = "#{left_or_right.downcase} #{location}"
+            elsif data[:location] =~ /#{location}/
+              location = data[:location]
+            else
+              # fallback to right location, because hamstring targets right so why not...
+              location = "right #{location}"
+            end
+          end
+
+          #echo '********************'
+          #echo "#{crit}: #{target_id} #{location}"
+
+          if not data[:ranks]
+            data[:ranks] = {}
+          end
+
+          cur_rank = data[:ranks][location].to_i
+
+          if cur_rank == crit[:rank]
+            cur_rank = cur_rank + crit[:rank]
+          else
+            cur_rank = [cur_rank, crit[:rank]].max
+          end
+
+          if cur_rank > 3
+            cur_rank = 3
+          end
+
+          #echo "new rank: #{cur_rank}"
+          #echo '********************'
+
+          data[:ranks][location] = cur_rank
+        end
+      }
+
+      line
+    }
+
+    self.install("crit", action)
+  end
+
+  #   Surgical strike removes the black forest ogre's left eye!
+  def install_unarmed
+    shunt_unarmed_target = nil
+
+    action = proc { |line|
+      if line =~ /You have (decent|good|excellent) positioning against <pushBold\/>an? <a exist="(\d+)"/
+        cache = SHuntTarget.get_target_data($2)
+        cache[:timestamp] = Time.now.to_i
+        cache[:uac_position] = $1
+        shunt_unarmed_target = $2
+      elsif shunt_unarmed_target and line =~ /\.\.\. and hit for \d+ points of damage!/
+        cache = SHuntTarget.get_target_data(shunt_unarmed_target)
+        cache[:uac_tier] = nil
+      elsif shunt_unarmed_target and line =~ /Strike leaves foe vulnerable to a followup (.*) attack!/
+        cache = SHuntTarget.get_target_data(shunt_unarmed_target)
+        cache[:uac_tier] = $1.strip
+      elsif shunt_unarmed_target and line =~ /but your attack has no effect!/
+        cache = SHuntTarget.get_target_data(shunt_unarmed_target)
+        cache[:uac_tier] = nil
+      elsif line =~ /The crimson mist surrounding <pushBold\/>the <a exist="(\d+)" noun=".*">.*<\/a><popBold\/> grows denser as .* looks increasingly vulnerable!|A crimson mist suddenly surrounds <pushBold\/>the <a exist="(\d+)" noun=".*">.*<\/a><popBold\/> as .* is unwillingly drawn into the corporeal plane!|The crimson mist surrounding <pushBold\/>the <a exist="(\d+)" noun=".*">.*<\/a><popBold\/> grows denser as .* is held in the corporeal plane!|A crimson mist suddenly surrounds <pushBold\/>the <a exist="(\d+)" noun=".*">.*<\/a><popBold\/> and <pushBold\/><a exist="\d+" noun=".*">(?:it|he|she)<\/a><popBold\/> appears vulnerable!/
+        id = $1 || $2 || $3 || $4
+        cache = SHuntTarget.get_target_data(id)
+        cache[:uac_smite] = true
+      elsif line =~ /The crimson mist surrounding <pushBold\/>an? <a exist="(\d+)" noun=".*">.*<\/a><popBold\/>(?: fades away as it)? appears less vulnerable\.|The crimson mist surrounding <pushBold\/>an? <a exist="(\d+)" noun=".*">.*<\/a><popBold\/> fades away as .* returns to an ethereal state\./
+        id = $1 || $2
+        cache = SHuntTarget.get_target_data(id)
+        cache[:uac_smite] = false
+      end
+
+      line
+    }
+
+    self.install("unarmed", action)
+  end
+end
+
+class SHuntTarget
+  @@undead = ["ancient ghoul master", "arch wight", "baesrukha", "banshee", "barghest", "bestial swordsman", "bog spectre", "bog wight", "bog wraith", "bone golem", "carceris", "citadel arbalester", "citadel guardsman", "citadel herald", "crazed zombie", "dark apparition", "darkwoode", "death dirge", "decaying tumbleweed", "decaying tumbleweed", "dybbuk", "eidolon", "elder ghoul master", "elder tree spirit", "fallen crusader", "firephantom", "flesh golem", "frenzied monk", "frost shade", "frost-glazed vine", "frostborne lich", "frosty plant", "frosty plant", "frozen corpse", "ghost", "ghost wolf", "ghostly mara", "ghostly pooka", "ghostly warrior", "ghoul master", "greater ghoul", "greater moor wight", "greater vruul", "ice skeleton", "ice troll", "ice wraith", "icy bush", "icy creeper", "icy creeper", "infernal lich", "krolvin pirate", "lesser ghoul", "lesser moor wight", "lesser mummy", "lesser shade", "lesser vruul", "lich qyn'arj", "lost soul", "mage apprentice", "mist wraith", "moaning phantom", "moaning spirit", "monastic lich", "n'ecare", "naisirc", "necrotic snake", "nedum vereri", "night hound", "night mare", "night serpent", "nightmare steed", "niirsha", "nonomino", "phantasma", "phantom", "revenant", "rotting chimera", "rotting corpse", "rotting farmhand", "rotting woodsman", "sacristan spirit", "seeker", "seraceris", "shadow mare", "shadow steed", "shadowy spectre", "shrickhen", "skeletal giant", "skeletal lord", "skeletal soldier", "skeletal warhorse", "skeleton", "snow spectre", "soul golem", "soul siphon", "spectral fisherman", "spectral lord", "spectral miner", "spectral monk", "spectral servant", "spectral shade", "spectral warrior", "spectral woodsman", "spectre", "taladorian knights", "taladorian mage", "thorned shrub", "thorned shrub", "tomb wight", "tree spirit", "triton defender", "triton sentry", "troll wraith", "troll zombie", "vaespilon", "vourkha", "waern", "warrior shade", "wehnimer's militiaman", "werebear", "wind wraith", "wolfshade", "wood wight", "wraith", "zombie", "zombie rolton"]
+  @@target_data = Hash.new
+
+  def SHuntTarget.get_target_data(target)
+    if target.nil? or target.empty?
+      echo "** error: missing or invalid target for get_target_data"
+      return
+    end
+
+    if target.class == GameObj or target.class == SHuntTarget
+      target = target.id
+    end
+
+    time = Time.now.to_i
+
+    # Remove cached data after 2 minutes
+    @@target_data.delete_if { |key, data| data[:timestamp] and (time - data[:timestamp]) > 120 }
+
+    if @@target_data[target].nil?
+      @@target_data[target] = {
+        # last time we observed an RT action
+        :last_action => 0,
+        # if the target left while we were fighitng them we can track it
+        :last_move => nil,
+        # timestamp of when this target was created (cleaned after two minutes)
+        :timestamp => time,
+        # attack actions against target that have a duration
+        :timed => {},
+      }
+    end
+
+    data = @@target_data[target]
+
+    # Expire timed durations
+    data[:timed].delete_if { |key, expires| time > expires }
+
+    data
+  end
+
+  def initialize(obj)
+    if obj.class != GameObj
+      echo "** SHuntTarget can only be initialized with a GameObj"
+    end
+    @obj = obj
+  end
+
+  def method_missing(m, *args, &block)
+    if args.empty?
+      @obj.send(m)
+    else
+      @obj.send(m, args)
+    end
+  end
+
+  def SHuntTarget.npcs
+    npcs = []
+    GameObj.npcs.each do |npc|
+      npcs.push(SHuntTarget.new(npc))
+    end
+
+    return npcs
+  end
+
+  def exists?
+    if (self.status == "dead" or
+        self.status == "gone" or
+        GameObj.npcs.find { |npc| npc.id == self.id }.nil?)
+      return false
+    end
+
+    return true
+  end
+
+  def target
+    if XMLData.current_target_id != self.id
+      dothistimeout("ta" + "rget"[0..rand(4)] + " #{self.noun_id}", 3, /You are now targeting/)
+    end
+  end
+
+  def noun_id
+    index = GameObj.npcs.delete_if { |npc| npc.noun != self.noun }.index { |npc| npc.id == self.id }
+    if index == 0
+      return self.noun
+    elsif index > 8
+      return self.id
+    end
+
+    prefix = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth"][index]
+
+    return "#{prefix} #{self.noun}"
+  end
+
+  def data
+    SHuntTarget.get_target_data(self.id)
+  end
+
+  def undead?
+    @@undead.any? do |undead|
+      if name == undead
+        next true
+      end
+      parts = undead.split(" ")
+      if parts.length > 2
+        undead = parts[1..2].join(" ")
+      end
+      next !!(name =~ /(?:ancient|grizzled).*#{undead}/)
+    end
+  end
+
+  def bandit?
+    !!(@obj.type =~ /bandit/i)
+  end
+
+  def flying?
+    !!(@obj.status =~ /flying/)
+  end
+
+  def knocked_over?
+    !!(@obj.status =~ /^(?:sitting|prone|lying|webbed)/ or self.data[:status] =~ /^(?:sitting|prone|lying|webbed)/)
+  end
+
+  def aggressive?
+    !!(@obj.type =~ /aggressive/i)
+  end
+
+  def holding_active?
+    !!self.data[:timed][:holding]
+  end
+
+  def assault_active?
+    !!self.data[:timed][:assault]
+  end
+
+  def lullabye_active?
+    !!self.data[:timed][:lullabye]
+  end
+
+  def feint_active?
+    !!self.data[:timed][:feint]
+  end
+
+  def sleeping?
+    !!(self.data[:status] =~ /sleep/ || @obj.status =~ /sleep/)
+  end
+
+  def webbed?
+    !!(self.data[:status] =~ /webbed/ || @obj.status =~ /webbed/)
+  end
+
+  def disabled?
+    !!(@obj.status =~ /^(?:webbed|frozen|stunned|kneeling|sitting|prone|lying|sleeping)/)
+  end
+end
+
+class SHunt
+  @@version = "2018.03.07"
+  @@wander_rooms = Array.new
+
+  attr_reader :settings
+  attr_accessor :debug
+
+  def SHunt.version
+    @@version
+  end
+
+  def initialize(settings)
+    @aim = nil
+    @aim_parts = []
+    @debug = settings[:debug] ? settings[:debug] : false
+    @position = "standing"
+    @seen_person = false
+    @settings = settings
+    @target = nil
+    @last_target = nil
+  end
+
+  def settings()
+    @settings
+  end
+
+  def prepare_aim(parts)
+    parts = parts.dup
+
+    if parts.class == "String"
+      parts = [parts]
+    end
+
+    target_data = SHuntTarget.get_target_data(@target)
+
+    # skip aiming at leg if they're already on their ass
+    # normally people aim at leg to get to the right height or make the next ambush easier to hit (early levels)
+    if @target.knocked_over?
+      parts = parts.drop_while { |p| p =~ /leg/i }
+    end
+
+    if parts.length > 0
+      part = parts.first
+
+      #echo "aiming at #{part}"
+      #echo "target_data: #{target_data.inspect}"
+
+      # check to see if already is already rank 3 and skip it if so
+      # UAC crits are not tracked so this will never be true for UAC
+      if target_data[:ranks][part] == 3
+        parts.shift
+        part = parts.first
+
+        if parts.length == 0
+          self.clear_aim()
+        end
+      end
+
+      # if we weren't aiming there already then do it
+      if part and @aim != part
+        while (dothistimeout "aim " + part, 3, /You're now aiming at the/).nil?; end
+
+        @aim = part
+        target_data[:location] = part
+        target_data[:timestamp] = Time.now.to_i
+      end
+    else
+      self.clear_aim()
+    end
+
+    @aim_parts = parts
+  end
+
+  def clear_aim()
+    return if @aim.nil?
+
+    @aim = nil
+    while (dothistimeout "aim clear", 3, /You're now no longer/).nil?; end
+  end
+
+  def can_cast?
+    [Wounds.head, Wounds.neck, Wounds.rightArm, Wounds.nerves].max < 2 and not Spell["Sigil of Determination"].active?
+  end
+
+  def get_valid_targets()
+    targets = @settings[:targets]
+
+    if targets.nil? or targets.empty?
+      npcs = GameObj.targets
+      #pcs  = GameObj.pcs
+    else
+      targets = targets.collect { |name| name.gsub(/^\d+\.(.*)$/, '\1') }
+      npcs = GameObj.targets.find_all do |npc|
+        npc.name =~ /#{targets.join("|")}/i or
+        npc.type =~ /#{targets.join("|")}/i
+      end
+      #pcs     = GameObj.pcs.find_all { |pc| pc.noun =~ /#{targets.join('|')}/i }
+    end
+
+    valid_targets = (npcs ? npcs : []) # + (pcs ? pcs : [])
+    valid_targets.delete_if { |valid| @settings[:untargetable].any? { |ut| valid =~ /#{ut}/ } }
+  end
+
+  def should_flee?
+    # never flee in Duskruin arena
+    if Room.current.id == 24550
+      return false
+    end
+
+    valid = GameObj.targets.to_a.delete_if { |valid| @settings[:flee_ignore].any? { |ut| valid.name =~ /#{ut}/ } }
+
+    return !!(@settings[:flee_always].any? { |name| GameObj.loot.find { |loot| loot.name =~ /#{name}/ or loot.noun =~ /#{name}/ } } or
+              @settings[:flee_always].any? { |name| GameObj.targets.find { |npc| npc.name =~ /#{name}/ or npc.noun =~ /#{name}/ } } or
+              GameObj.loot.to_a.any? { |obj| obj.noun =~ /cloud|void/i or obj.name =~ /sealed fissure/i } or
+              valid.length >= @settings[:flee_at].to_i)
+  end
+
+  def set_target(target = nil)
+    if target.nil?
+      if XMLData.current_target_id
+        target = GameObj.targets.find { |npc| npc.id == XMLData.current_target_id }
+      end
+
+      if target.nil?
+        # target any non-disabled bandit
+        target = GameObj.npcs.find { |n| n.type =~ /bandit/ and n.status.nil? }
+        # target any non-disabled aggressive
+        target = GameObj.npcs.find { |n| n.type =~ /aggressive/ and n.status.nil? } if target.nil?
+        # target disabled bandit
+        target = GameObj.npcs.find { |n| n.type =~ /bandit/ and n.status !~ /dead/ } if target.nil?
+        # target disabled aggressive
+        target = GameObj.npcs.find { |n| n.type =~ /aggressive/ and n.status !~ /dead/ } if target.nil?
+        # target anything aggressive (except hanging tree vipers, do those last)
+        target = GameObj.npcs.find { |n| n.type =~ /bandit|aggressive/ and n.status !~ /dead/ and n.name !~ /tree viper/ } if target.nil?
+        # target anything aggressive
+        target = GameObj.npcs.find { |n| n.type =~ /bandit|aggressive/ and n.status !~ /dead/ } if target.nil?
+        # target anything else
+        target = GameObj.npcs.find { |n| n.status !~ /dead/ } if target.nil?
+      end
+    end
+
+    # set the last target for tracking
+    if @target
+      @last_target = @target.clone
+    else
+      @last_target = nil
+    end
+
+    if not target.nil?
+      @target = SHuntTarget.new(target)
+      self.clear_aim()
+    end
+
+    @target.target()
+    @target
+  end
+
+  def target
+    if @target and (not @target.exists? or @target.status =~ /dead/)
+      @last_target = @target.clone
+      @target = nil
+      self.clear_aim()
+    end
+
+    @target
+  end
+
+  def can_focused_mstrike?
+    return (Skills.multiopponentcombat >= 30 and self.can_mstrike?)
+  end
+
+  def can_mstrike?
+    stam_req = @settings[:mstrike_stamina].to_i
+
+    return (Skills.multiopponentcombat >= 5 &&
+            checkstamina(1) &&
+            !GameObj.npcs.to_a.any? { |obj| obj.noun =~ /nest/i } &&
+            !Spell["POPed Muscles"].active? &&
+            (!Spell["MStrike Cooldown"].active? || (stam_req > 0 && checkstamina(stam_req))))
+  end
+
+  def put_cmd(cmd)
+    # wait for current RT to finish
+    current_rt = (checkrt.to_f) - 0.25
+    sleep current_rt if current_rt > 0
+
+    self.ready_position()
+
+    timeout = Time.now.to_f
+
+    # repeats the attack for things like roundtime, missing limbs on aiming, etc.
+    repeat_attack = false
+
+    Script.current.want_downstream_xml = true
+    Script.current.want_downstream = false
+    Script.current.clear()
+
+    Game.puts(cmd)
+
+    while line = get
+      if line =~ /already missing that|does not have|aim that high/i
+        if @aim_parts.length == 0
+          fput "aim clear"
+        end
+
+        cache = SHuntTarget.get_target_data(self.target())
+        cache[:location] = @aim_parts.first
+
+        @aim_parts.shift
+
+        if @aim_parts.length == 0
+          self.clear_aim()
+        else
+          self.prepare_aim(@aim_parts)
+        end
+
+        repeat_attack = true
+        break
+      elsif line =~ /Your <a exist="(\d+)" noun="(\w+)">.*<\/a> returns to normal\./
+        id = $1.to_i
+        noun = $2.to_s
+
+        waitrt?
+        waitcastrt?
+
+        if Char.prof == "Paladin"
+          if Spell[1604].known? and Spell[1604].affordable?
+            Spell[1604].cast(id)
+          else
+            echo("-- consecrate wore off on [#{id.to_s}] (#{$2})")
+          end
+        elsif Spell[304].known? and Spell[304].affordable?
+          Spell[304].cast(id)
+        else
+          lootsack = self.lootsack()
+          potion = nil
+
+          if lootsack and @settings[:bless_with_pure_potion]
+            potion = lootsack.contents.find { |l| l.name =~ /(?:im)?pure potion/ }
+          end
+
+          if potion
+            empty_left_hand
+            fput "get ##{potion.id}"
+            fput "pour ##{potion.id} on ##{GameObj.right_hand.id}"
+            if checkleft
+              fput "stow ##{potion.id}"
+            end
+            fill_left_hand
+          elsif Spell["Symbol of Blessing"].known? and Spell["Symbol of Blessing"].affordable?
+            Spell["Symbol of Blessing"].cast(id)
+          else
+            echo("-- bless wore off on [#{id.to_s}] (#{$2})")
+          end
+        end
+        break
+      elsif line =~ /Your attack skids off the blocky side|Your attack slides right through/
+        cache = SHuntTarget.get_target_data(self.target())
+        cache[:uac_tier] = nil
+      elsif line =~ /You strike out at .* but your attack has no effect/i
+        if not(gear = GameObj.inv.find { |i| i.name =~ /\b(?:gloves|handwraps|gauntlets)\b/i })
+          echo("-- failed to find uac gear to bless")
+        else
+          id = gear.id.to_i
+          noun = gear.name
+
+          waitrt?
+          waitcastrt?
+
+          if Spell[304].known? and Spell[304].affordable?
+            Spell[304].cast(id)
+          elsif Spell[9802].known? and Spell[9802].affordable?
+            Spell[9802].cast(id)
+          else
+            echo("-- bless wore off on [#{id.to_s}] (#{noun})")
+          end
+        end
+        break
+      elsif line =~ /You swing (?:a|an|the) <a exist="(\d+)" noun="(\w+)">.*<\/a> at .*, but it has no effect!/
+        id = $1.to_i
+        noun = $2.to_s
+
+        waitrt?
+        waitcastrt?
+
+        if Spell[304].known? and Spell[304].affordable?
+          Spell[304].cast(id)
+        elsif Spell[9802].known? and Spell[9802].affordable?
+          Spell[9802].cast(id)
+        else
+          echo("-- bless wore off on [#{id.to_s}] (#{noun})")
+        end
+        break
+      elsif line =~ /Your <a exist="(\d+)" noun="(\w+)">.*<\/a> stops glowing\./
+        id = $1.to_s
+        noun = $2.to_s
+
+        waitrt?
+        waitcastrt?
+
+        if Spell[902].known? and Spell[902].affordable?
+          removed = false
+          if item = GameObj.inv.find { |i| i.id == id }
+            removed = true
+            fput "remove ##{id}"
+          end
+
+          fput "prep 902"
+          fput "evoke"
+
+          if removed
+            fput "wear ##{id}"
+          end
+        else
+          echo("-- edge wore off on [#{id}] (#{$2})")
+        end
+        break
+      elsif line =~ /The scintillating \w+ light surrounding the <a exist="(\d+)" noun="(\w+)">.*<\/a> fades away\./
+        id = $1.to_i
+        noun = $2.to_s
+
+        waitrt?
+        waitcastrt?
+
+        if Spell[411].known? and Spell[411].affordable?
+          Spell[411].cast(id)
+        else
+          echo("-- e-blade wore off on [#{id.to_s}] (#{$2})")
+        end
+        break
+      elsif line =~ /The ethereal necrotic film covering your <a exist="(\d+)" noun="(\w+)">.*<\/a> shrivels away\./
+        id = $1.to_i
+        noun = $2.to_s
+
+        waitrt?
+        waitcastrt?
+
+        if Spell[735].known? and Spell[735].affordable?
+          Spell[735].cast(id)
+        else
+          echo("-- ensorcell wore off on [#{id.to_s}] (#{$2})")
+        end
+        break
+      elsif line =~ /As you try to throw a <a exist="([^"]+)" noun="[^"]+">[^<]+<\/a>, you realize it's already detached!/
+        fput "pull ##{$1}"
+        waitrt?
+        repeat_attack = true
+      elsif line =~ /Try standing up first/
+        self.command_stand()
+        break
+      elsif line =~ /wait:? (\d+)/i
+        repeat_attack = true
+        break
+      elsif line =~ /Your armor prevents/i
+        repeat_attack = true
+        waitcastrt?
+        break
+      elsif line =~ /USAGE|EXAMPLE|is already lying down|What were you referring to\?|what\?|Please rephrase|You do not currently|Your armor|what\?/
+        break
+      elsif line =~ /(?:Cast )?Roundtime:? \d+/i
+        break
+      elsif Time.now.to_f - timeout > 0.5
+        break
+      elsif line =~ /You currently have no valid target\./
+        break
+      elsif line =~ /You prepare yourself to strike quickly on your next combat action\./
+        break
+      end
+    end
+
+    Script.current.want_downstream_xml = false
+    Script.current.want_downstream = true
+
+    if repeat_attack
+      return self.put_cmd(cmd)
+    end
+  end
+
+  # The result of this is read by attack_target to determine results such as roll
+  def command(command, args)
+    if @debug
+      echo(">> command(#{command}, #{args.inspect})")
+    end
+
+    if command =~ /^wtrick|cman|disarm|tackle|sweep|cheapshot/ and Spell["POPed Muscles"].active?
+      return
+    end
+
+    if command == "uac" or command == "unarmed"
+      self.command_uac(args)
+    elsif command == "sleep"
+      self.command_sleep(args[0] ? args[0].to_f : 1.00)
+    elsif command == "kneel"
+      self.command_kneel()
+    elsif command == "stand"
+      self.command_stand()
+    elsif command == "berserk"
+      self.command_berserk()
+    elsif command == "wait"
+      self.command_wait(args[0] ? args[0].to_i : 20)
+    elsif command == "ambush"
+      self.command_ambush()
+    elsif command == "hurl"
+      self.command_hurl()
+    elsif command == "kill" or command == "attack"
+      self.command_kill()
+    elsif command == "kweed" or command == "weed"
+      self.command_weed(command == "kweed")
+    elsif command == "ammo"
+      self.command_ammo(args[0] ? args[0] : "arrow")
+    elsif command == "cock"
+      self.command_cock(args[0] ? args[0] : "crossbow")
+    elsif command == "load"
+      self.command_load(args[0] ? args[0] : "bolt", args[1] ? args[1] : "crossbow")
+    elsif command == "firex"
+      self.command_firex()
+    elsif command == "fire"
+      self.command_fire(args[0] ? args[0] : "arrow")
+    elsif command == "mstrike"
+      self.command_mstrike()
+    elsif command == "stance"
+      self.command_stance(args[0], args[1])
+    elsif command == "aim"
+      self.command_aim(args)
+    elsif command == "hide"
+      self.command_hide(args[0] ? args[0].to_i : 0)
+    elsif command == "vibe"
+      self.command_1002(args[0] ? args[0] : nil)
+    elsif command == "wrack"
+      self.command_wrack()
+    elsif command == "holding"
+      self.command_holding()
+    elsif command == "lullabye"
+      self.command_lullabye()
+    elsif command == "assault"
+      self.command_assault(args[0] ? args[0] : "")
+    elsif command == "dirtkick"
+      self.command_dirtkick()
+    elsif command == "incant" and args[0].to_i > 0
+      self.command_spell(args.shift.to_i, true, args.join(" "))
+    elsif command == "cast" and args[0].to_i > 0
+      self.command_spell(args.shift.to_i, false, args.join(" "))
+    elsif command == "script"
+      begin
+        StringProc.new(args[0]).call()
+      rescue
+        echo "** You have an error in your script. Paste the following to debug."
+        echo ";e StringProc.new(\"#{args[0]}\")"
+      end
+    elsif command =~ /\d+/
+      self.command_spell(command.to_i, true)
+    elsif Script.exists?(command) or Script.exists?("shunt-" + command)
+      if Script.exists?("shunt-" + command)
+        command = "shunt-" + command
+      end
+
+      Script.run(command, args.join(" "), :quiet => true)
+    else
+      self.put_cmd(command + " " + args.join(" "))
+    end
+
+    if checkrt > 0 and checkrt - 0.25 > 0
+      sleep (checkrt - 0.25)
+    end
+  end
+
+  def attack()
+    if not(target = self.target())
+      return
+    end
+
+    command = @settings[:targets].find do |cmd|
+      target.name =~ /#{cmd.gsub(/^\d+\.(.*)$/i, '\1')}/i or
+      target.noun =~ /#{cmd.gsub(/^\d+\.(.*)$/i, '\1')}/i
+    end
+
+    attack_line = nil
+    attack_num = 0
+    if command =~ /(\d+)\..*$/
+      attack_num = ($1.to_i) - 1
+    end
+
+    if not @settings[:attack_lines][attack_num]
+      attack_line = @settings[:attack_lines][0]
+    else
+      attack_line = @settings[:attack_lines][attack_num]
+    end
+
+    self.execute(attack_line)
+  end
+
+  def execute(attack_line)
+    if @debug
+      echo ">> execute(#{attack_line})"
+    end
+
+    attack_line.split(",").each do |attack_part|
+      parts, if_parts, until_parts = split_attack_part(attack_part)
+
+      command = parts.shift.strip
+      args = parts
+
+      # count, based on \d+x syntax (e.g., "kill if not disabled? or 4x" would attack 4 times or until target is disabled)
+      count = 0
+      max_count = 1
+
+      # remove counts from args
+      args.delete_if do |p|
+        if p =~ /(\d+)x/
+          max_count = $1.to_i
+          true
+        else
+          false
+        end
+      end
+
+      # roll required for certain maneuver
+      roll = nil
+
+      if_part = if_parts.size > 0 ? if_parts.join(" ") : nil
+      until_part = until_parts.size > 0 ? until_parts.join(" ") : nil
+
+      while @debug or (self.target() and count < max_count)
+        if @debug
+          echo ">> skipping flee check"
+        elsif self.should_flee?()
+          break
+        end
+
+        if if_part
+          break if not eval(if_part)
+        end
+
+        count += 1
+
+        self.buff()
+        clear()
+
+        # new style commands can have a hash of options
+        if args.join(" ") =~ /\s*[^=]+=[\w\d]+\s*/i
+          args = args.join(" ").split(/([^=\s]+)=/)
+          args.shift
+
+          opts = {}
+
+          i = 0
+          loop do
+            opts[args[i].to_sym] = args[i + 1].strip.gsub(/^"/, "").gsub(/"$/, "")
+            i += 2
+            if i >= args.length
+              break
+            end
+          end
+          self.command(command, opts)
+        else
+          self.command(command, args)
+        end
+
+        if reget.reverse[0..3].any? { |line| line =~ /Roll result: -?(\d+)/ }
+          roll = $1.to_i
+        else
+          roll = nil
+        end
+
+        if not self.target()
+          break
+        end
+
+        if until_part
+          res = eval(until_part)
+          break if res
+
+          # unsuccessful until_parts should not affect the count
+          count -= 1
+        end
+
+        if @debug
+          echo(">> debug mode, sleeping 1 second")
+          sleep 1
+        end
+      end
+
+      if @debug
+        echo ">> skipping target check"
+      elsif not self.target()
+        break
+      end
+    end
+  end
+
+  def split_attack_part(attack_part)
+    # script commands don't get modified
+    if attack_part =~ /^script\s+/i
+      return [["script", attack_part.gsub(/^script\s+/i, "")], [], []]
+    end
+
+    if_started = false
+    until_started = false
+
+    args = []
+    if_parts = []
+    until_parts = []
+
+    attack_part.split(/\s+/).each do |part|
+      if part == "if"
+        if_started = true
+        next
+      end
+
+      if part == "until"
+        if_started = false
+        until_started = true
+        next
+      end
+
+      if if_started
+        if_parts.push(part)
+      elsif until_started
+        until_parts.push(part)
+      else
+        args.push(part)
+      end
+    end
+
+    [args, self.sub_attack_parts(if_parts), self.sub_attack_parts(until_parts)]
+  end
+
+  def sub_attack_parts(part)
+    part.collect do |p|
+      # stamina/mana
+      if p =~ /\b(sp?|m)(\d+)\b/
+        cmd = $1.to_s
+        if cmd == "s"
+          next "checkstamina(" + $2.to_s + ")"
+        elsif cmd == "m"
+          next "checkmana(" + $2.to_s + ")"
+        elsif cmd == "sp"
+          next "checkspirit(" + $2.to_s + ")"
+        end
+      elsif p =~ /webbed/
+        next "self.target().webbed?"
+        # shortcut for disabled
+      elsif p =~ /disabled\??/
+        next "self.target().disabled?"
+        # roll result
+      elsif p =~ /\br(\d+)\b/
+        next "(roll.nil? or roll > #{$1.to_s})"
+      elsif p =~ /uac=(\w+)/
+        next "(SHuntTarget.get_target_data(self.target())[:uac_position] == '#{$1.to_s}')"
+      end
+      # number of times to repeat
+      next p
+    end
+  end
+
+  def ready_position()
+    if @position == "kneeling"
+      while not kneeling?
+        put "kneel"
+        sleep 0.50
+      end
+    else
+      while not standing?
+        put "stand"
+        sleep 0.50
+      end
+    end
+  end
+
+  def ammosack()
+    if UserVars.ammosack.nil?
+      echo("** UserVars.ammosack has not been set; set change ammosack item")
+      return
+    end
+
+    ammosack = GameObj.inv.find { |i| i.noun =~ /\b#{UserVars.ammosack}\b/i }
+
+    if not ammosack
+      echo("** failed to find ammosack in inventory")
+      return
+    end
+
+    ammosack
+  end
+
+  def lootsack()
+    if UserVars.lootsack.nil?
+      echo("** UserVars.lootsack has not been set; set change lootsack item")
+      return
+    end
+
+    lootsack = GameObj.inv.find { |i| i.noun =~ /\b#{UserVars.lootsack}\b/i }
+
+    if not lootsack
+      echo("** failed to find lootsack in inventory")
+      return
+    end
+
+    lootsack
+  end
+
+  def command_sleep(time)
+    if time.to_f > 0
+      sleep(time.to_f)
+    end
+  end
+
+  def command_kneel()
+    @position = "kneeling"
+    self.ready_position()
+  end
+
+  def command_stand()
+    @position = "standing"
+    self.ready_position()
+  end
+
+  def command_berserk()
+    if Char.prof != "Warrior"
+      return
+    end
+
+    if not Spell["POPed Muscles"].active? and checkstamina(20) and not Spell["Berserk"].active?
+      self.put_cmd("berserk")
+    end
+
+    if Spell["Berserk"].active?
+      wait_while { Spell["Berserk"].active? }
+
+      # fix to make sure we don't try to mstrike right after berserk with no stamina
+      Spell["MStrike Cooldown"].timeleft = 75
+      Spell["MStrike Cooldown"].putup()
+    end
+  end
+
+  def command_uac(opts)
+    tiers = {
+      0 => "decent",
+      1 => "good",
+      2 => "excellent",
+    }
+
+    if opts.class != Hash
+      opts = {}
+    end
+    if not opts[:attack]
+      opts[:attack] = "punch"
+    end
+    if not opts[:tier]
+      opts[:tier] = "jab"
+    end
+    if not opts[:mstrike_attack]
+      opts[:mstrike_attack] = "punch"
+    end
+    if not opts[:mstrike_count]
+      opts[:mstrike_count] = 1
+    end
+    if not opts[:aim_at]
+      opts[:aim_at] = "excellent"
+    end
+    if not opts[:aim_attack]
+      opts[:aim_attack] = "punch"
+    end
+
+    if not(target = self.target())
+      return
+    end
+
+    valid_targets = self.get_valid_targets()
+    data = target.data()
+    pos = self.uac_pos_int(data[:uac_position])
+
+    if self.can_focused_mstrike? and valid_targets.length == 1
+      attack = "mstrike #{opts[:mstrike_attack]} #{target.noun_id}"
+    elsif self.can_mstrike? and valid_targets.length >= opts[:mstrike_count].to_i
+      attack = "mstrike #{opts[:mstrike_attack]}"
+    elsif data[:uac_tier]
+      attack = "#{data[:uac_tier]}"
+    elsif data[:uac_position] == "excellent"
+      attack = "#{opts[:attack]}"
+    else
+      attack = "#{opts[:tier]}"
+    end
+
+    if attack !~ /^mstrike/i
+      aim_at = self.uac_pos_int(opts[:aim_at])
+
+      if (opts[:aim] and (pos >= aim_at or
+                          (data[:uac_tier] and data[:uac_tier] != "jab" and pos >= aim_at - 1)))
+        self.command_aim(opts[:aim])
+        self.prepare_aim(@aim_parts) unless @aim_parts.empty?
+
+        if hidden? or (not data[:uac_tier] and opts[:aim_attack])
+          attack = opts[:aim_attack]
+        end
+      end
+    end
+
+    if opts[:uac_smite] and not data[:uac_smite] and self.uac_pos_int(data[:uac_position]) >= self.uac_pos_int(opts[:uac_smite])
+      data = target.data()
+      if self.uac_pos_int(opts[:uac_smite]) >= self.uac_pos_int(data[:uac_position])
+        self.put_cmd("smite")
+        return self.command_uac(args)
+      end
+    end
+
+    self.put_cmd(attack)
+  end
+
+  def command_wrack
+    spirit_count = 0
+    [Spell["Sign of Swords"], Spell["Sign of Shields"], Spell["Sign of Dissipation"]].each do |sn|
+      spirit_count += 1 if sn.active?
+    end
+
+    if maxspirit - Spell["Sign of Wracking"].spirit_cost <= spirit_count
+      return
+    end
+
+    Spell["Sign of Wracking"].cast()
+  end
+
+  def command_holding
+    if self.target().holding_active?
+      return
+    end
+
+    return command_spell(Spell[1001])
+  end
+
+  def command_assault(fallback)
+    if not self.target().assault_active? or Spell[fallback].nil? or not Spell[fallback].affordable?
+      return command_spell(Spell[1110])
+    end
+
+    return command_spell(Spell[fallback])
+  end
+
+  def command_lullabye
+    if self.target().lullabye_active?
+      return
+    end
+
+    if self.target().sleeping?
+      return
+    end
+
+    return command_spell(Spell[1005])
+  end
+
+  def command_dirtkick
+    cache = self.get_target_data(self.target())
+
+    if cache[:dirtkick]
+      return nil
+    end
+  end
+
+  def command_1002(alt)
+    if not(target = self.target())
+      return
+    end
+
+    res = dothistimeout("look at #{target.noun_id}", 3, /(?:She|He|It) has a?|has nothing at this/)
+    res = $_SERVERBUFFER_.reverse.find { |line| line =~ /#{target.id}/ }
+
+    if res =~ /has nothing at this/
+      return self.command_spell(Spell[alt]) if alt
+      return nil
+    end
+
+    items = res.scan(/<a exist="[^"]+" noun="[^"]+">([^<]+)<\/a>( \(worn\))?/)
+
+    if not items.find { |item| item[0] !~ /He|She|It/ and item[1].nil? }
+      return self.command_spell(Spell[alt]) if alt
+      return nil
+    end
+
+    self.command_spell(Spell[1002])
+  end
+
+  def command_spell(spell, incant = true, extra = "")
+    if spell.class == Fixnum
+      spell = Spell[spell]
+    end
+
+    if checkprep != "None" and checkprep != spell.name
+      fput "release"
+    end
+
+    # wait for current RT to finish (-0.10 for faster attacks)
+    current_rt = checkcastrt - 0.25
+    sleep current_rt if current_rt > 0
+
+    if not(target = self.target())
+      return
+    end
+
+    if incant
+      self.put_cmd("incant #{spell.num} #{extra}")
+    else
+      spell.cast(target.noun_id)
+    end
+  end
+
+  def command_aim(parts)
+    if parts.class == Array
+      parts = parts.join("|")
+    end
+    @aim_parts = parts.split("|")
+    if @aim_parts.length === 1 and @aim_parts[0] == "clear"
+      self.clear_aim()
+    end
+  end
+
+  def command_ambush()
+    if not(target = self.target())
+      return
+    end
+
+    self.prepare_aim(@aim_parts) unless @aim_parts.empty?
+    self.put_cmd("ambush #{target.noun_id}")
+  end
+
+  def command_hide(wait)
+    if GameObj.targets.any? { |t| t.status.nil? }
+      self.command_stance("defensive")
+    end
+
+    res = nil
+    while not hidden? and res !~ /You look around/
+      res = fput "hide"
+      sleep 0.25
+    end
+
+    if wait > 0
+      self.command_wait(wait)
+    else
+      self.buff()
+    end
+  end
+
+  def command_weed(kweed)
+    return if GameObj.loot.find { |l| l.name =~ /vine/i }
+
+    if kweed
+      self.command_stance("offensive")
+    end
+
+    lines = self.put_cmd("inc 610")
+
+    if kweed
+      self.command_stance("guarded")
+    end
+
+    lines
+  end
+
+  def command_hurl()
+    self.prepare_aim(@aim_parts) unless @aim_parts.empty?
+    self.put_cmd("hurl")
+
+    # Chain spear retraction
+    if $_SERVERBUFFER_.find { |l| l =~ /Your <a exist="([^"]+)" noun="[^"]+">[^<]+<\/a> lashes forth to its fullest extent/ }
+      waitrt?
+      dothistimeout "pull ##{$1}", 3, /You deftly pull back|You draw back the/
+      waitrt?
+    end
+  end
+
+  def command_kill()
+    if not(target = self.target())
+      return
+    end
+
+    self.put_cmd("kill #{target.noun_id}")
+  end
+
+  def command_ammo(ammo = "arrow")
+    ammosack = self.ammosack()
+
+    if GameObj.right_hand.name =~ /#{ammo}/
+      return
+    end
+
+    if GameObj.right_hand.id
+      fput "store right"
+
+      if GameObj.right_hand.id
+        fput "stow right"
+      end
+    end
+
+    res = dothistimeout "get 1 my #{ammo} from ##{ammosack.id}", 3, /You remove|I could not find/
+    if res =~ /I could not find|Get what\?/
+      echo("** failed to ammunition")
+    end
+  end
+
+  def command_fire(ammo = "arrow")
+    self.command_ammo(ammo)
+
+    if not GameObj.right_hand.id
+      echo("** failed to find \"#{ammo}\" to fire")
+      return
+    end
+
+    self.prepare_aim(@aim_parts) unless @aim_parts.empty?
+    self.put_cmd("fire")
+  end
+
+  def command_firex()
+    self.prepare_aim(@aim_parts) unless @aim_parts.empty?
+    self.put_cmd("fire")
+  end
+
+  def command_load(ammo = "bolt", item = "crossbow")
+    self.command_ammo(ammo)
+
+    ammosack = self.ammosack()
+
+    res = dothistimeout "load #{item}", 3, /You flip open the stock|I could not find|But your mechanical crossbow|You load/
+    if res =~ /I could not find/
+      echo("** failed to find weapon to load")
+    elsif res =~ /But your mechanical/
+      fput "put ##{GameObj.right_hand.id} in ##{ammosack.id}" if checkright =~ /bolt/
+      fput "put ##{GameObj.left_hand.id} in ##{ammosack.id}" if checkleft =~ /bolt/
+    end
+  end
+
+  def command_cock(item)
+    res = dothistimeout "cock #{item}", 3, /is already cocked|You draw back on/
+    # TODO: handle res?
+  end
+
+  def command_mstrike()
+    if self.can_focused_mstrike? and GameObj.targets.length == 1
+      if not(target = self.target())
+        return
+      end
+
+      self.put_cmd("mstrike #{target.noun_id}")
+    elsif self.can_mstrike? and GameObj.targets.length > 1
+      self.put_cmd("mstrike")
+    else
+      self.command_kill()
+    end
+  end
+
+  def command_stance(stance, disabled_stance = nil)
+    if disabled_stance.nil?
+      disabled_stance = stance
+    end
+
+    target = self.target()
+    if target.disabled?
+      stance = disabled_stance
+    end
+
+    return if Spell["Zealot"].active? or Spell["Frenzy"].active? or dead?
+    return if checkstance(stance)
+    return if stance == "defensive" and checkstance("guarded")
+
+    while (cur_stance = checkstance) != stance
+      res = dothistimeout("stance #{stance}", 2, /You are now|Roundtime|Wait|wait|Your rage causes you/)
+      if res =~ /Roundtime: (\d+)|wait (\d+)/i
+        time = ($1 || $2).strip.to_f - 1
+        if time > 0
+          sleep (time)
+        end
+      elsif res =~ /Your rage causes you/
+        break
+      elsif cur_stance == "guarded" and stance == "defensive"
+        break
+      end
+    end
+  end
+
+  def command_wait(timeout = 20)
+    if not(target = self.target())
+      return
+    end
+
+    stance = @settings[:wait_stance]
+    if stance.nil? or stance.empty?
+      stance = "defensive"
+    end
+
+    start = Time.now.to_i
+
+    while true
+      if (Time.now.to_i - start >= timeout or
+          not target.exists? or
+          target.status =~ /dead/i or
+          target.disabled? or
+          self.should_flee?)
+        break
+      end
+
+      data = target.data()
+
+      # if they have performed an action in the last two seconds then break
+      if data[:last_action] > 0 and (Time.now.to_f - data[:last_action]) <= 2
+        # reset their last action attempt
+        data[:last_action] = 0
+        break
+      end
+
+      self.command_stance(stance)
+      self.buff()
+      self.ready_position()
+
+      sleep(0.01)
+    end
+  end
+
+  def reset
+    @seen_person = false
+    self.clear_aim()
+    self.command_stand()
+
+    self.stop_active_scripts()
+  end
+
+  def uac_pos_int(position)
+    ["decent", "good", "excellent"].index(position) + 1
+  end
+
+  def clear_target()
+    @target = nil
+  end
+
+  def get_target_gameobj(target = nil)
+    if target.class == String
+      if target[0] == "#"
+        target = GameObj.npcs.find { |npc| npc.id == target[1..-1] }
+      else
+        target = GameObj.npcs.find { |npc| npc.name =~ /#{target}/ or npc.id == target }
+      end
+    end
+
+    if target.nil? or target.type =~ /passive/
+      target = GameObj.npcs.find { |npc| npc.status !~ /dead/i and npc.type !~ /passive/i and npc.noun !~ /^arms?$/i }
+    end
+
+    target
+  end
+
+  def go2(room)
+    if hidden?
+      fput "unhide"
+    end
+
+    if Room.current.id.to_s == room.to_s
+      return
+    end
+
+    if checkarea =~ /Table/
+      fput "stand" until standing?
+      move "out"
+    end
+
+    kill_script("go2") if running? "go2"
+    wait_while { running? "go2" }
+    start_script("go2", [room.to_s, "_disable_confirm_"], flags = { :quiet => true })
+    wait_while { running? "go2" }
+  end
+
+  def buff
+    buffs = @settings[:buffs].clone
+
+    # Only certain spells get cast while hidden
+    buffs.delete_if do |buff|
+      spell = Spell[buff]
+      if hidden? && spell.num > 100 and spell.num < 1200
+        next true
+      end
+      false
+    end
+
+    buffs.each do |buff|
+      spell = Spell[buff]
+
+      if spell.name == "Symbol of Renewal" and (Spell["Symbol of Renewal Cooldown"].active? or checkspirit(maxspirit))
+        next
+      end
+
+      if not @settings[:buffs_skip_cooldown]
+        ["Burst of Swiftness", "Surge of Strength", "Shadow Mastery"].each do |name|
+          if spell.name == name and Spell["#{name} Cooldown"].active?
+            next
+          end
+        end
+      end
+
+      # Ensure we know the spell and it's affordable
+      if not spell or not spell.affordable? or spell.active?
+        next
+      end
+
+      # Don't overextend on Spirit
+      spirit_count = 0
+      [Spell["Sign of Swords"], Spell["Sign of Shields"], Spell["Sign of Dissipation"]].each do |s|
+        if s.active? #and (s.time_per - s.timeleft) < 3
+          spirit_count += 1
+        end
+      end
+
+      # Ensure we have enough spirit
+      if spell.spirit_cost > 0 and (percentspirit < 75 or spirit_count > 2)
+        next
+      end
+
+      if not ["Horland\'s Holler"].include?(spell.name) and not spell.known?
+        next
+      end
+
+      if spell.name =~ /^Symbol/
+        if not $favor
+          echo("-- skipping #{spell.name} because #{$lich_char}sexual-favors isn't available")
+          next
+        end
+
+        if $favor[:symbol] <= 0
+          next
+        end
+
+        res = fput "#{spell.name.downcase}"
+        if res =~ /call forth enough power/
+          if $favor[:symbol] > 0
+            $favor[:symbol] = 0
+          end
+        end
+        next
+      end
+
+      spell.cast()
+
+      sleep(0.250)
+
+      # If Horland's Holler was a failure we try again in 60 seconds
+      if spell.name == "Horland's Holler" and not spell.active?
+        spell.timeleft = 60
+        spell.putup()
+      end
+    end
+  end
+
+  def hunt()
+    # try to track the target if it moved on us
+    if @last_target and not @last_target.exists?
+      # wait up to one second for move data to update (should happen much faster)
+      10.times { break if @last_target.data[:last_move]; sleep 0.10 }
+
+      if @last_target.data[:last_move]
+        if hidden?
+          fput "sneak #{@last_target.data[:last_move]}"
+        else
+          move "#{@last_target.data[:last_move]}"
+        end
+
+        if npc = GameObj.targets.find { |npc| npc.id == @last_target.id }
+          @last_target = nil
+
+          self.set_target(npc)
+
+          if not GameObj.pcs.nil?
+            fput "say Chasin' this one."
+          end
+        end
+      end
+    end
+
+    if self.target() and not self.should_flee?
+      self.buff()
+      self.ready_position()
+      self.attack()
+
+      # clean out last target if it's still hanging around
+      # if @last_target and SHuntTarget.npcs.any? { |npc| npc.id == @last_target.id and (npc.status =~ /dead/ or not npc.exists?) }
+      #     @last_target = nil
+      # end
+
+      if GameObj.npcs.any? { |npc| npc.status == "dead" }
+        if @settings[:looter] === ""
+          if GameObj.targets.any?
+            self.command_stance("defensive")
+          end
+          fput "loot"
+        else
+          Script.run(@settings[:looter])
+        end
+        if not @last_target.exists?
+          @last_target = nil
+        end
+      end
+    else
+      self.command_stand()
+      self.command_stance("defensive")
+      self.wander_for_target()
+
+      if @settings[:bless_gear_enable]
+        to_wear = @settings[:bless_gear_off]
+        to_remove = @settings[:bless_gear_on]
+
+        if @target.undead?
+          to_wear = @settings[:bless_gear_on]
+          to_remove = @settings[:bless_gear_off]
+        end
+
+        container = GameObj.inv.find { |i| i.name =~ /#{@settings[:bless_gear_container]}/i }
+        if container
+          if not container.contents
+            fput "look in ##{container.id}"
+            30.times { break if not container.contents.nil?; sleep 0.10 }
+          end
+
+          to_remove.each do |name|
+            item = GameObj.inv.find { |o| o.name =~ /#{name}/i }
+            if item
+              fput "_drag ##{item.id} ##{container.id}"
+            end
+          end
+
+          to_wear.each do |name|
+            item = container.contents.find { |o| o.name =~ /#{name}/i }
+            if item
+              fput "_drag ##{item.id} wear"
+            end
+          end
+        else
+          echo "** bless_gear_enable is on but could not find bless_gear_container: #{@settings[:bless_gear_container]}"
+        end
+      end
+    end
+  end
+
+  def prepare_hunt
+    go2(@settings[:room])
+    self.buff()
+  end
+
+  def start_active_scripts
+    @settings[:active_scripts].each { |script|
+      args = script.split(" ")
+      script = args.shift
+
+      next if running? script
+
+      start_script(script, args)
+    }
+  end
+
+  def stop_active_scripts
+    @settings[:active_scripts].each { |script| kill_script(script) if running? script }
+  end
+
+  def wander
+    if @seen_person and not hidden?
+      # sleep(rand(0.0..1.0))
+    elsif @settings[:slow_mode]
+      sleep(0.50 + rand(0.0..0.50))
+    end
+
+    # Suddenly you feel sick and queasy, and your world seems blurry and indistinct.  You fight an intense vertigo for a moment before the sensation leaves you.  You regain your senses, blink once and look around.
+    if reget.any? { |l| l =~ /Suddenly you feel sick and queasy/ }
+      self.prepare_hunt()
+    elsif reget.any? { |l| l =~ /Suddenly, you feel a sensation of being yanked from behind your navel as you are hurled improbably backwards, away from the fissure/ }
+      self.prepare_hunt()
+    elsif reget.any? { |l| l =~ /The air whooshes by you at great speed, then suddenly stops/ }
+      self.prepare_hunt()
+    end
+
+    room = Room.current
+    next_room_options = room.wayto.keys - (@settings[:boundaries].nil? ? [] : @settings[:boundaries])
+    next_room_options.delete_if { |room_id| (room.timeto[room_id].class == Proc) and room.timeto[room_id].call.nil? }
+    next_room = next_room_options.find_all { |r| not @@wander_rooms.include?(r) }
+    if next_room.empty?
+      next_room = @@wander_rooms.find { |r| next_room_options.include?(r) }
+    else
+      next_room = next_room[rand(next_room.length)]
+    end
+    @@wander_rooms.delete(next_room)
+    @@wander_rooms.push(next_room)
+    way = room.wayto[next_room]
+
+    if way.class == String
+      move(way)
+    else
+      way.call()
+    end
+
+    if hidden?
+      sleep(0.75)
+    end
+  end
+
+  def wander_for_target
+    @target = nil
+
+    loop do
+      self.command_stance("defensive")
+      self.command_stand()
+
+      if @settings[:hide_move]
+        if GameObj.targets.empty?
+          self.command_hide(0)
+        end
+      elsif hidden?
+        fput "unhide"
+      end
+
+      if GameObj.pcs or (GameObj.loot.find { |obj| (obj.noun == "disk") and (obj.name !~ /#{Char.name}/) })
+        @seen_person = true
+        self.wander()
+      elsif self.should_flee?
+        self.wander()
+      else
+        targets = self.get_valid_targets()
+        if targets.length > 0
+          return self.set_target(targets.first)
+        end
+        self.wander()
+      end
+    end
+  end
+end
+
+$shunt = SHunt.new(settings)
+
+$shunt_hooks = SHuntHooks.new($shunt)
+$shunt_hooks.install_crit_tracker()
+$shunt_hooks.install_move_watcher()
+$shunt_hooks.install_target_status()
+$shunt_hooks.install_wait_watcher()
+$shunt_hooks.install_unarmed()
+
+print_option = proc do |option, msg, eg = "", pad = 2|
+  if eg != ""
+    msg = sprintf("%-40s #{$lich_char}#{script.name} #{eg}", msg)
+  end
+
+  respond(sprintf("  %s%-25s %s", " " * pad, option, msg))
+end
+
+if script.vars[1] == "help"
+  respond("SHunt #{SHunt.version} by SpiffyJr (Kips)")
+  respond("")
+  respond("SHunt is a hunting script alternative to Bigshot.")
+  respond("")
+  respond("Basic usage: #{$lich_char}#{script.name}")
+  respond("")
+  respond("Extra commands:")
+  print_option.call("help", "show this help message")
+  print_option.call("commands", "get detailed help on attack commands available")
+  print_option.call("list [setting]", "print all current settings (or specified setting)")
+  print_option.call("update", "reload after updating from repository")
+  respond("")
+  respond("Configure SHunt by setting options:")
+  print_option.call("<setting> <value>", "set or add value to setting", "room 228")
+  print_option.call("<setting> +<value>", "add value to setting", "targets +forest troll")
+  print_option.call("<setting> -<value>", "delete value from setting", "targets -forest troll")
+  print_option.call("<setting> -<number>", "delete value from array by index", "targets -0")
+  respond("")
+  respond("Available options:")
+  default_settings.each do |k, v|
+    if v[1].nil?
+      next
+    end
+
+    print_option.call(k, v[1])
+  end
+  respond("")
+  respond("Sample attack lines:")
+  respond("    wait 20,stance offensive,uac jab 3x")
+  respond("    hide 0,stance offensive,aim head,ambush")
+  respond("    stance offensive,906 target if m6,903 target if m3")
+  respond("    stance offensive,wtrick feint target if s7 until r101,mstrike")
+  respond("    stance offensive,118 if not disabled,1110 111 if disabled")
+elsif script.vars[1] == "commands"
+  respond("SHunt #{SHunt.version} by SpiffyJr (Kips)")
+  respond("")
+  respond("Commands are the backbone to configuring SHunt to fight for you.")
+  respond("")
+  respond("Use the command reference below to prepare your attack lines. Commands should be separated")
+  respond("with a command. e.g., 'stance offensive,kill' would stance to offensive then kill the target.")
+  respond("")
+  respond(" * Any script that exists can be called by using the script name as a command.")
+  respond(" * If a command is not matched it gets sent directly to the game as is.")
+  respond("")
+  respond("Generic:")
+  print_option.call("aim <locations>", "specify aim locations to use, e.g., aim left eye|right eye|neck")
+  print_option.call("ambush", "ambush target")
+  print_option.call("hide [time]", "hide and wait up to [time] for target to sniff")
+  print_option.call("kill", "generic attack")
+  print_option.call("mstrike", "mstrike if not on cooldown otherwise regular attack")
+  print_option.call("stance [stance]", "change stance to [stance] if possible")
+  print_option.call("wait [time]", "wait up to [time] seconds for the critter to attack")
+  respond("")
+  respond("Archery:")
+  print_option.call("ammo [name]", "get ammo of name specified (default: arrow)")
+  print_option.call("cock", "cock your crossbow")
+  print_option.call("fire [name]", "get ammo and fire your bow at the target")
+  print_option.call("firex", "fire your crossbow at the target")
+  print_option.call("kneel", "kneel for crossbow use and prevents auto-standing by shunt")
+  print_option.call("load", "load your crossbow")
+  print_option.call("stand", "stand up and have shunt manage standing again")
+  respond("")
+  respond("Combat Manuevers:")
+  print_option.call("berserk", "use berserk")
+  print_option.call("dirtkick", "will dirtkick if the target is not on cooldown")
+  respond("")
+  respond("Spells:")
+  print_option.call("cast <spell> [extra]", "cast the spell with INCANT disabled")
+  print_option.call("incant <spell> [extra]", "cast the spell with INCANT enabled")
+  print_option.call("wrack", "wrack and tries not to kill you")
+  print_option.call("[number]", "same as cast <spell> with no extra args")
+  respond("")
+  respond("Unarmed Combat:")
+  print_option.call("uac [attack=punch tier=jab mstrike_attack=punch mstrike_count=1 smite=excellent aim=false aim_at=abdomen]")
+  respond("        tier: specify the tier up attack")
+  respond("        attack: specify the attack to use when excellent")
+  respond("        mstrike_attack: attack to use for mstrikes")
+  respond("        mstrike_count: number of targets required to mstrike")
+  respond("        smite: tier to enable smiting (disabled by default)")
+  respond("        aim: tier to aim at (disabled by default)")
+  respond("        aim_at: parts to aim at (disabled by default)")
+  respond("")
+  respond("Bard:")
+  print_option.call("holding", "will cast holding if target is not on cooldown")
+  print_option.call("lullabye", "will cast lullabye if target is not on cooldown")
+  print_option.call("vibe", "will 1002 target if they have something to blow up")
+  respond("")
+  respond("Empath:")
+  print_option.call("assault [fallback]", "cast Empathic Assault if not active, otherwise cast fallback")
+  respond("")
+  respond("Ranger:")
+  print_option.call("kweed", "cast killer weed if one is not present")
+  print_option.call("weed", "cast weed if one is not present")
+  respond("")
+elsif script.vars[1] == "list"
+  respond("SHunt settings")
+  respond("==================================================")
+  settings.sort.each do |k, v|
+    if not script.vars[2].nil? and script.vars[2] != k.to_s
+      next
+    end
+    if k == :buffs
+      spells = v.
+        collect { |name| Spell[name].name }.
+        sort { |a, b| Spell[a].num - Spell[b].num }.
+        delete_if { |name| !name }
+
+      puts("#{monsterbold_start}#{k}#{monsterbold_end}:")
+      spells.each do |spell|
+        puts("    #{spells.index(spell) + 1}. #{spell}")
+      end
+    elsif v.class == Array
+      puts("#{monsterbold_start}#{k}#{monsterbold_end}:")
+      v.each do |entry|
+        puts("    #{v.index(entry) + 1}. #{entry}")
+      end
+    else
+      puts("#{monsterbold_start}#{k}#{monsterbold_end}: #{v}")
+    end
+  end
+elsif script.vars[0] =~ /^([^\s]+)\s*(.*)?$/ and not settings[$1.downcase.strip.to_sym].nil?
+  setting = $1.downcase.to_sym
+  value = $2.strip.downcase
+  action = nil
+
+  if not defined?(settings[setting]) or settings[setting].nil?
+    echo "** setting \"#{setting}\" does not exist"
+    exit
+  end
+
+  if value =~ /^([+-])(.*)$/
+    action = $1
+    value = $2.strip.downcase
+  end
+
+  case setting
+  when :buffs
+    if Spell[value].nil? and value != "reset"
+      echo "** failed to find spell for #{value}"
+      exit
+    else
+      value = Spell[value].num
+    end
+  end
+
+  if value == "reset"
+    settings.delete(setting)
+    echo "-- reset #{setting}"
+  elsif settings[setting].class == Array
+    if action == "-"
+      if value =~ /\d/ and settings[setting][value.to_i - 1]
+        value = settings[setting].delete_at(value.to_i - 1)
+      else
+        value = settings[setting].delete(value)
+      end
+
+      if value.nil?
+        echo "-- index does not exist for \"#{setting}\""
+        exit
+      end
+
+      echo "-- \"#{value}\" removed from \"#{setting}\""
+    else
+      if value =~ /^(\d+) (.*)$/
+        index = $1.to_i - 1
+        value = $2.to_s
+
+        if settings[setting][index]
+          echo "-- entry \"#{index + 1}\" for #{setting} updated to \"#{value}\""
+          settings[setting][index] = value
+        else
+          echo "-- entry \"#{index + 1}\" for #{setting} does not exist"
+        end
+
+        exit
+      end
+
+      settings[setting].push(value)
+      echo "-- \"#{value}\" added to \"#{setting}\""
+    end
+
+    echo "-- \"#{setting}\" is now \"#{settings[setting].join(", ")}\""
+  else
+    if settings[setting].class == FalseClass or settings[setting].class == TrueClass
+      value = (value =~ /^true|1|yes|on/) ? true : false
+    elsif settings[setting].class == Fixnum
+      value = value.to_i
+    end
+
+    echo "-- set \"#{setting}\" to \"#{value}\""
+    settings[setting] = value
+  end
+
+  $shunt = nil
+else
+  echo "-- SHunt has been loaded; this script does nothing by itself"
+  echo "-- If you want a loop hunter try ;shunt-loop"
+end

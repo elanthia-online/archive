@@ -1,0 +1,17 @@
+=begin
+Author: Demmit
+Does: Quits after a Dreavening
+=end
+
+while line = get
+
+	if line =~ /^Dreaven exclaims\, \"That\'s everything\!\"$/
+		echo "Quitting in ten seconds!"
+		echo "Quitting in ten seconds!"
+		echo "Quitting in ten seconds!"
+		echo "Quitting in ten seconds!"
+		echo "Quitting in ten seconds!"
+		sleep 10
+		fput "quit"
+	end
+end

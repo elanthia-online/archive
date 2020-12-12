@@ -1,0 +1,210 @@
+data = {
+    'adventurers_guild' => {:name => 'Adventurer\'s Guild', :shortname => 'Adventurer\'s Guild', :categories => ['Guilds', 'Wehnimer\'s Landing', 'Icemule Trace', 'Vornavis', 'River\'s Rest', 'Isle of the Four Winds', 'Teras Isle', 'Zul Logoth', 'Elven Nations']},
+    'confluence' => {:name => 'Elemental Confluence, The', :shortname => 'Elemental Confluence', :categories => ['Other']},
+    'ebonstone_manor' => {:name => 'Wehnimer\'s Landing - Ebonstone Manor', :shortname => 'Ebonstone Manor', :categories => ['Wehnimer\'s Landing', 'CHE']},
+    'en-aradhul-road' => {:name => 'Elven Nations - Aradhul Road', :shortname => 'Aradhul Road', :categories => ['Elven Nations']},
+    'en-cemetery' => {:name => 'Elven Nations - Ta\'Vaalor Cemetary and Neartofar Forest', :shortname => 'Cemetary/Neartofar Forest', :categories => ['Elven Nations']},
+    'en-cleric_guild' => {:name => 'Elven Nations - Ta\'Illistim Cleric Guild', :shortname => 'Cleric Guild (Ta\'Illistim)', :categories => ['Elven Nations', 'Guilds']},
+    'en-cysaegir' => {:name => 'Elven Nations - Cysaegir', :shortname => 'Cysaegir', :categories => ['Elven Nations', 'Towns']},
+    'en-fearling' => {:name => 'Elven Nations - Fearling Pass', :shortname => 'Fearling Pass', :categories => ['Elven Nations']},
+    'en-gyldemar' => {:name => 'Elven Nations - Gyldemar', :shortname => 'Gyldemar', :categories => ['Elven Nations']},
+    'en-illistim_rogue_guild' => {:name => 'Elven Nations - Ta\'Illistim Rogue Guild', :shortname => 'Rogue Guild (Ta\'Illistim)', :categories => ['Elven Nations', 'Guilds']},
+    'en-old_ta_faendryl' => {:name => 'Elven Nations - Old Ta\'Faendryl', :shortname => 'Old Ta\'Faendryl', :categories => ['Elven Nations']},
+    'en-ravelin' => {:name => 'Elven Nations - Ravelin', :shortname => 'Ravelin', :categories => ['Elven Nations']},
+    'en-sapphire' => {:name => 'Elven Nations - Ta\'Illistim Sapphire Gate', :shortname => 'Sapphire Gate/Whistler\'s Pass North', :categories => ['Elven Nations']},
+    'en-skull' => {:name => 'Elven Nations - Skull Temple', :shortname => 'Skull Temple', :categories => ['Elven Nations']},
+    'en-sylvarraend' => {:name => 'Elven Nations - Sylvarraend Road', :shortname => 'Sylvarraend Road', :categories => ['Elven Nations', 'Towns']},
+    'en-ta_illistim-embassies' => {:name => 'Elven Nations - Ta\'Illistim Embassies', :shortname => 'Ta\'Illistim Embassies', :categories => ['Elven Nations']},
+    'en-ta_illistim-isharn_enclave' => {:name => 'Elven Nations - Ta\'Illistim - Isharn Enclave', :shortname => 'Isharn Enclave', :categories => ['Elven Nations', 'MHO']},
+    'en-ta_illistim-new' => {:name => 'Elven Nations - Ta\'Illistim', :shortname => 'Ta\'Illistim', :categories => ['Elven Nations', 'Towns']},
+    'en-ta_illistim-rangerguild-v2' => {:name => 'Elven Nations - Ta\'Illistim Ranger Guild', :shortname => 'Ranger Guild (Ta\'Illistim)', :categories => ['Elven Nations', 'Guilds']},
+    'en-ta_illistim-sorcerer_guild' => {:name => 'Elven Nations - Ta\'Illistim Sorcerer Guild', :shortname => 'Sorcerer Guild (Ta\'Illistim)', :categories => ['Elven Nations', 'Guilds']},
+    'en-ta_illistim-wizard_guild' => {:name => 'Elven Nations - Ta\'Illistim Wizard Guild', :shortname => 'Wizard Guild (Ta\'Illistim)', :categories => ['Elven Nations', 'Guilds']},
+    'en-ta_illistim_buildings' => {:name => 'Elven Nations - Ta\'Illistim Buildings', :shortname => 'Ta\'Illistim Buildings', :categories => ['Elven Nations']},
+    'en-ta_vaalor' => {:name => 'Elven Nations - Ta\'Vaalor', :shortname => 'Ta\'Vaalor', :categories => ['Elven Nations', 'Towns']},
+    'en-ta_vaalor-dancing_dahcre' => {:name => 'Elven Nations - Ta\'Vaalor - Dancing Dahcre', :shortname => 'Ta\'Vaalor - Dancing Dahcre (Annex)', :categories => ['Elven Nations', 'CHE']},
+    'en-ta_vaalor-sorcerer_guild' => {:name => 'Elven Nations - Ta\'Vaalor Sorcerer Guild', :shortname => 'Sorcerer Guild (Ta\'Vaalor)', :categories => ['Elven Nations', 'Guilds']},
+    'en-ta_vaalor-wyverns_keep' => {:name => 'Elven Nations - Ta\'Vaalor - Wyvern Keep', :shortname => 'Ta\'Vaalor - Wyvern Keep', :categories => ['Elven Nations']},
+    'en-tower' => {:name => 'Elven Nations - Maaghara Tower', :shortname => 'Maaghara Tower', :categories => ['Elven Nations']},
+    'en-trail' => {:name => 'Elven Nations - Trail (Locksmehr River/West of Dragonspine)', :shortname => 'Locksmehr River Trail', :categories => ['Elven Nations', 'Wehnimer\'s Landing']},
+    'en-vaalor-rogue-guild' => {:name => 'Elven Nations - Ta\'Vaalor Rogue Guild', :shortname => 'Rogue Guild (Ta\'Vaalor)', :categories => ['Elven Nations', 'Guilds']},
+    'en-victory' => {:name => 'Elven Nations - Victory Road', :shortname => 'Victory Road', :categories => ['Elven Nations']},
+    'en-vo-homes' => {:name => 'Neighborhood of Elven Nations and Solhaven', :shortname => 'Neighborhood of Elven Nations and Solhaven', :categories => ['Elven Nations', 'Vornavis', 'Neighborhoods', 'Premium']},
+    'en-whistlers_pass' => {:name => 'Elven Nations - Whistler\'s Pass', :shortname => 'Whistler\'s Pass', :categories => ['Elven Nations']},
+    'en-zul-sorcerer_guild' => {:name => 'Zul Logoth - Sorcerer Guild', :shortname => 'Sorcerer Guild (Zul Logoth)', :categories => ['Zul Logoth', 'Guilds']},
+    'en-zul-wizard_guild' => {:name => 'Zul Logoth - Wizard Guild', :shortname => 'Wizard Guild (Zul Logoth)', :categories => ['Zul Logoth', 'Guilds']},
+    'en-zul_logoth' => {:name => 'Zul Logoth - Town Map', :shortname => 'Zul Logoth', :categories => ['Zul Logoth', 'Towns']},
+    'en-zul_logoth-rangerguild-v2' => {:name => 'Zul Logoth - Ranger Guild', :shortname => 'Ranger Guild (Zul Logoth)', :categories => ['Zul Logoth', 'Guilds']},
+    'fest-albatross' => {:name => 'fest-albatross', :shortname => 'fest-albatross', :categories => ['Events and Festivals']},
+    'fest-duskruin' => {:name => 'fest-duskruin', :shortname => 'fest-duskruin', :categories => ['Events and Festivals']},
+    'fest-ebon_gate' => {:name => 'fest-ebon_gate', :shortname => 'fest-ebon_gate', :categories => ['Events and Festivals']},
+    'fest-festival_of_the_fallen' => {:name => 'fest-festival_of_the_fallen', :shortname => 'fest-festival_of_the_fallen', :categories => ['Events and Festivals']},
+    'fest-highman_games' => {:name => 'fest-highman_games', :shortname => 'fest-highman_games', :categories => ['Events and Festivals']},
+    'fest-lumnea' => {:name => 'fest-lumnea', :shortname => 'fest-lumnea', :categories => ['Events and Festivals']},
+    'fest-midsummers-night' => {:name => 'fest-midsummers-night', :shortname => 'fest-midsummers-night', :categories => ['Events and Festivals']},
+    'fest-picklefest' => {:name => 'fest-picklefest', :shortname => 'fest-picklefest', :categories => ['Events and Festivals']},
+    'fest-spitfire' => {:name => 'fest-spitfire', :shortname => 'fest-spitfire', :categories => ['Events and Festivals']},
+    'ifw-cleric_guild' => {:name => 'Isle of the Four Winds - Cleric Guild', :shortname => 'Cleric Guild (FWI)', :categories => ['Isle of the Four Winds', 'Guilds', 'Premium']},
+    'ifw-eastern_waterway' => {:name => 'Isle of the Four Winds - Eastern Waterway', :shortname => 'Eastern Waterway', :categories => ['Isle of the Four Winds', 'Premium']},
+    'ifw-empath_guild' => {:name => 'Isle of the Four Winds - Empath Guild', :shortname => 'Empath Guild (FWI)', :categories => ['Isle of the Four Winds', 'Guilds', 'Premium']},
+    'ifw-isle_of_four_winds' => {:name => 'Isle of the Four Winds - Mist Harbor', :shortname => 'Mist Harbor', :categories => ['Isle of the Four Winds', 'Towns', 'Premium']},
+    'ifw-rogue_guild' => {:name => 'Isle of the Four Winds - Rogue Guild', :shortname => 'Rogue Guild (FWI)', :categories => ['Isle of the Four Winds', 'Guilds', 'Premium']},
+    'ifw-saewehna_lagoon' => {:name => 'Four Winds - Monsoon Lagoon', :shortname => 'Monsoon Lagoon', :categories => ['Isle of the Four Winds', 'Premium']},
+    'ifw-warrior guild' => {:name => 'Four Winds - Warrior Guild', :shortname => 'Warrior Guild (IFW)', :categories => ['Isle of the Four Winds', 'Guilds', 'Premium']},
+    'ifw-wilds' => {:name => 'Isle of the Four Winds - Wilds', :shortname => 'Wilds', :categories => ['Isle of the Four Winds', 'Premium']},
+    'imt-bramble_patch' => {:name => 'Icemule Trace - Bramble Patch', :shortname => 'Bramble Patch', :categories => ['Icemule Trace']},
+    'imt-cleric_guild' => {:name => 'Icemule Trace - Cleric Guild', :shortname => 'Cleric Guild (Icemule)', :categories => ['Icemule Trace', 'Guilds']},
+    'imt-clovertooth_hall' => {:name => 'Icemule Trace - Clovertooth Hall', :shortname => 'Clovertooth Hall', :categories => ['Icemule Trace']},
+    'imt-east_west_north_gates' => {:name => 'Icemule Trace - East, West and North Gates', :shortname => 'East, West and North Gates', :categories => ['Icemule Trace']},
+    'imt-empath_guild' => {:name => 'Icemule Trace - Empath Guild', :shortname => 'Empath Guild (Icemule)', :categories => ['Icemule Trace', 'Guilds']},
+    'imt-homes' => {:name => 'Neighborhoods of Icemule Trace and Pinefar', :shortname => 'Neighborhoods of Icemule Trace and Pinefar', :categories => ['Icemule Trace', 'Neighborhoods', 'Premium']},
+    'imt-icemule' => {:name => 'Icemule Trace', :shortname => 'Icemule Trace', :categories => ['Icemule Trace', 'Towns']},
+    'imt-pinefar' => {:name => 'Icemule Trace - Pinefar', :shortname => 'Pinefar', :categories => ['Icemule Trace', 'Towns']},
+    'imt-rangerguild-v2' => {:name => 'Icemule Trace - Ranger Guild', :shortname => 'Ranger Guild (Icemule)', :categories => ['Icemule Trace', 'Guilds']},
+    'imt-reim' => {:name => 'Icemule Trace - The Settlement of Reim', :shortname => 'The Settlement of Reim', :categories => ['Icemule Trace']},
+    'imt-rift' => {:name => 'Icemule Trace - Rift, The', :shortname => 'Rift, The', :categories => ['Icemule Trace']},
+    'imt-rogue_guild' => {:name => 'Icemule Trace - Rogue Guild', :shortname => 'Rogue Guild (Icemule)', :categories => ['Icemule Trace', 'Guilds']},
+    'imt-scatter' => {:name => 'Icemule Trace - Scatter, The', :shortname => 'Scatter, The', :categories => ['Icemule Trace']},
+    'imt-silvermule_gaming_hall' => {:name => 'Icemule Trace - Silvermule Gaming Hall', :shortname => 'Silvermule Gaming Hall', :categories => ['Icemule Trace']},
+    'imt-sorcerer_guild' => {:name => 'Icemule Trace - Sorcerer Guild', :shortname => 'Sorcerer Guild (Icemule)', :categories => ['Icemule Trace', 'Guilds']},
+    'imt-south_gate' => {:name => 'Icemule Trace - South Gate Wilds', :shortname => 'South Gate Wilds', :categories => ['Icemule Trace']},
+    'imt-trail' => {:name => 'Icemule Trace - Trail to Wehnimer\'s Landing', :shortname => 'Trail between Wehnimer\'s Landing and Icemule', :categories => ['Icemule Trace', 'Wehnimer\'s Landing']},
+    'imt-underground' => {:name => 'Icemule Trace - Underground', :shortname => 'Underground', :categories => ['Icemule Trace']},
+    'imt-whitehaven2' => {:name => 'Icemule Trace - House White Haven (Map #1)', :shortname => 'House White Haven (Map #1)', :categories => ['Icemule Trace', 'CHE']},
+    'imt-white_haven' => {:name => 'Icemule Trace - House White Haven (Map #2)', :shortname => 'House White Haven (Map #2)', :categories => ['Icemule Trace', 'CHE']},
+    'imt-wizard_guild' => {:name => 'Icemule Trace - Wizard Guild', :shortname => 'Wizard Guild (Icemule)', :categories => ['Icemule Trace', 'Guilds']},
+    'premium_halls' => {:name => 'Premium Halls of Elanthia', :shortname => 'Premium Halls of Elanthia', :categories => ['Premium', 'Elven Nations', 'Wehnimer\'s Landing', 'Zul Logoth', 'River\'s Rest', 'Icemule Trace', 'Vornavis', 'Teras Isle']},
+    'red_forest' => {:name => 'Red Forest, The', :shortname => 'Red Forest', :categories => ['Wehnimer\'s Landing', 'Elven Nations']},
+    'rr-beacon_hall' => {:name => 'River\'s Rest - Beacon Hall Archive', :shortname => 'Beacon Hall Archive', :categories => ['River\'s Rest', 'CHE']},
+    'rr-citadel' => {:name => 'River\'s Rest - Citadel', :shortname => 'Citadel', :categories => ['River\'s Rest']},
+    'rr-maelstrom' => {:name => 'River\'s Rest - Maelstrom Bay', :shortname => 'Maelstrom Bay', :categories => ['River\'s Rest']},
+    'rr-marsh_keep' => {:name => 'River\'s Rest - Marsh Keep', :shortname => 'Marsh Keep', :categories => ['River\'s Rest']},
+    'rr-rivers_rest' => {:name => 'River\'s Rest', :shortname => 'River\'s Rest', :categories => ['River\'s Rest', 'Towns']},
+    'rr-rogue_guild' => {:name => 'River\'s Rest - Rogue Guild', :shortname => 'Rogue Guild (River\'s Rest)', :categories => ['River\'s Rest', 'Guilds']},
+    'rr-sorcerer_guild' => {:name => 'River\'s Rest - Sorcerer Guild', :shortname => 'Sorcerer Guild (River\'s Rest)', :categories => ['River\'s Rest', 'Guilds']},
+    'rr-warrens' => {:name => 'River\'s Rest - Warrens', :shortname => 'Warrens', :categories => ['River\'s Rest']},
+    'rr-wizard_guild' => {:name => 'River\'s Rest - Wizard Guild', :shortname => 'Wizard Guild (River\'s Rest)', :categories => ['River\'s Rest', 'Guilds']},
+    'sanctum' => {:name => 'Sanctum of Scales', :shortname => 'Sanctum of Scales', :categories => ['Other']},
+    'spire_grounds_5117' => {:name => 'Summit Academy and Sylinar\'s Spire', :shortname => 'Summit Academy and Sylinar\'s Spire', :categories => ['Other']},
+    'ti-adventurers_rest' => {:name => 'Teras Isle - Adventurer\'s Rest', :shortname => 'Adventurer\'s Rest', :categories => ['Teras Isle']},
+    'ti-cleric_guild' => {:name => 'Teras Isle - Cleric Guild', :shortname => 'Cleric Guild (Teras)', :categories => ['Teras Isle', 'Guilds']},
+    'ti-nelemar' => {:name => 'Teras Isle - Nelemar', :shortname => 'Nelemar', :categories => ['Teras Isle']},
+    'ti-rogue_guild' => {:name => 'Teras Isle - Rogue Guild', :shortname => 'Rogue Guild (Teras)', :categories => ['Teras Isle', 'Guilds']},
+    'ti-rr-homes' => {:name => 'Neighborhoods of Teras Isle and River\'s Rest', :shortname => 'Neighborhoods of Teras Isle and River\'s Rest', :categories => ['Teras Isle', 'River\'s Rest', 'Neighborhoods', 'Premium']},
+    'ti-sorcerer_guild' => {:name => 'Teras Isle - Sorcerer Guild', :shortname => 'Sorcerer Guild (Teras)', :categories => ['Teras Isle', 'Guilds']},
+    'ti-teras' => {:name => 'Teras Isle - Kharam-Dzu', :shortname => 'Kharam-Dzu', :categories => ['Teras Isle', 'Towns']},
+    'ti-vtull' => {:name => 'Teras Isle - Eye of V\'Tull', :shortname => 'Eye of V\'Tull', :categories => ['Teras Isle']},
+    'ti-wilds' => {:name => 'Teras Isle - Fhorian Village', :shortname => 'Fhorian Village', :categories => ['Teras Isle']},
+    'ti-wizard_guild' => {:name => 'Teras Isle - Wizard Guild', :shortname => 'Wizard Guild (KD)', :categories => ['Teras Isle', 'Guilds']},
+    'vo-caravansary' => {:name => 'Vornavis - Caravansary', :shortname => 'Caravansary', :categories => ['Vornavis']},
+    'vo-cleric_guild' => {:name => 'Vornavis - Cleric Guild', :shortname => 'Cleric Guild (VO)', :categories => ['Vornavis', 'Guilds']},
+    'vo-foggy_valley' => {:name => 'Vornavis - Foggy Valley', :shortname => 'Foggy Valley', :categories => ['Vornavis']},
+    'vo-north_beach' => {:name => 'Vornavis - North Beach', :shortname => 'North Beach', :categories => ['Vornavis']},
+    'vo-outlands' => {:name => 'Vornavis - Outlands', :shortname => 'Outlands', :categories => ['Vornavis']},
+    'vo-rangerguild-v2' => {:name => 'Vornavis - Ranger Guild', :shortname => 'Ranger Guild (VO)', :categories => ['Vornavis', 'Guilds']},
+    'vo-rogue_guild' => {:name => 'Vornavis - Rogue Guild', :shortname => 'Rogue Guild (VO)', :categories => ['Vornavis', 'Guilds']},
+    'vo-solhaven' => {:name => 'Vornavis - Solhaven', :shortname => 'Solhaven', :categories => ['Vornavis', 'Towns']},
+    'vo-sorcerer_guild' => {:name => 'Vornavis - Sorcerer Guild', :shortname => 'Sorcerer Guild (VO)', :categories => ['Vornavis', 'Guilds']},
+    'vo-trail' => {:name => 'Trail to Vornavis', :shortname => 'Trail to Vornavis', :categories => ['Vornavis', 'Wehnimer\'s Landing']},
+    'vo-warehouse_lockers' => {:name => 'Vornavis - Solhaven Lockers', :shortname => 'Solhaven Lockers', :categories => ['Vornavis']},
+    'warcamp' => {:name => 'Grimswarm Warcamp', :shortname => 'Grimswarm Warcamp', :categories => ['Other']},
+    'warrior_guilds' => {:name => 'Warrior Guilds', :shortname => 'Warrior Guilds', :categories => ['Guilds', 'Elven Nations', 'Icemule Trace', 'Vornavis', 'Wehnimer\'s Landing', 'River\'s Rest', 'Teras Isle']},
+    'wl-beacon_hall' => {:name => 'Wehnimer\'s Landing - Beacon Hall Annex', :shortname => 'Beacon Hall Annex', :categories => ['Wehnimer\'s Landing', 'CHE']},
+    'wl-black_wolves_manor' => {:name => 'Wehnimer\'s Landing - Black Wolves', :shortname => 'Black Wolves', :categories => ['Wehnimer\'s Landing', 'MHO']},
+    'wl-brigatta' => {:name => 'Wehnimer\'s Landing - House Brigatta (Map 1)', :shortname => 'House Brigatta (Map 1)', :categories => ['Wehnimer\'s Landing', 'CHE']},
+    'wl-broken' => {:name => 'Wehnimer\'s Landing - Broken Lands', :shortname => 'Broken Lands', :categories => ['Wehnimer\'s Landing']},
+    'wl-burrow_way' => {:name => 'Wehnimer\'s Landing - Burrow Way', :shortname => 'Burrow Way', :categories => ['Wehnimer\'s Landing']},
+    'wl-catacombs' => {:name => 'Wehnimer\'s Landing - Catacombs', :shortname => 'Catacombs', :categories => ['Wehnimer\'s Landing']},
+    'wl-cavernhold' => {:name => 'Wehnimer\'s Landing - Cavernhold', :shortname => 'Cavernhold', :categories => ['Wehnimer\'s Landing']},
+    'wl-cleric_guild' => {:name => 'Wehnimer\'s Landing - Cleric Guild', :shortname => 'Cleric Guild (Wehnimer\'s)', :categories => ['Wehnimer\'s Landing', 'Guilds']},
+    'wl-coastal_cliffs' => {:name => 'Wehnimer\'s Landing - Coastal Cliffs', :shortname => 'Coastal Cliffs', :categories => ['Wehnimer\'s Landing']},
+    'wl-danjirland' => {:name => 'Wehnimer\'s Landing - Danjirland', :shortname => 'Danjirland', :categories => ['Wehnimer\'s Landing']},
+    'wl-darkstone' => {:name => 'Wehnimer\'s Landing - Darkstone Castle', :shortname => 'Darkstone Castle', :categories => ['Wehnimer\'s Landing']},
+    'wl-deadfall' => {:name => 'Wehnimer\'s Landing - Deadfall Forest', :shortname => 'Deadfall Forest', :categories => ['Wehnimer\'s Landing']},
+    'wl-dyers_tent' => {:name => 'Wehnimer\'s Landing - Reignbeau Caverns (Dyer\'s Tent)', :shortname => 'Reignbeau Caverns (Dyer\'s Tent)', :categories => ['Wehnimer\'s Landing']},
+    'wl-empath_guild' => {:name => 'Wehnimer\'s Landing - Empath Guild', :shortname => 'Empath Guild (Wehnimer\'s)', :categories => ['Wehnimer\'s Landing', 'Guilds']},
+    'wl-faendrylenclave' => {:name => 'Wehnimer\'s Landing - Faendryl Enclave', :shortname => 'Faendryl Enclave', :categories => ['Wehnimer\'s Landing', 'MHO']},
+    'wl-gates' => {:name => 'Wehnimer\'s Landing - Outside Gates', :shortname => 'Outside Gates', :categories => ['Wehnimer\'s Landing']},
+    'wl-graveyard' => {:name => 'Wehnimer\'s Landing - Graveyard', :shortname => 'Graveyard', :categories => ['Wehnimer\'s Landing']},
+    'wl-halcyon_hills' => {:name => 'Wehnimer\'s Landing - Halcyon Hills', :shortname => 'Halcyon Hills', :categories => ['Wehnimer\'s Landing']},
+    'wl-hearthstone_manor' => {:name => 'Wehnimer\'s Landing - Hearthstone Manor', :shortname => 'Hearthstone Manor', :categories => ['Wehnimer\'s Landing']},
+    'wl-homes-1' => {:name => 'Neighborhoods of Wehnimer\'s Landing #1', :shortname => 'Neighborhoods of Wehnimer\'s Landing #1', :categories => ['Wehnimer\'s Landing', 'Neighborhoods', 'Premium']},
+    'wl-homes-2' => {:name => 'Neighborhoods of Wehnimer\'s Landing #2', :shortname => 'Neighborhoods of Wehnimer\'s Landing #2', :categories => ['Wehnimer\'s Landing', 'Neighborhoods', 'Premium']},
+    'wl-brigatta' => {:name => 'Wehnimer\'s Landing - House Brigatta (Map 2)', :shortname => 'House Brigatta (Map 2)', :categories => ['Wehnimer\'s Landing', 'CHE']},
+    'wl-house_onoir' => {:name => 'Wehnimer\'s Landing - House Daingneach Onoir', :shortname => 'House Daingneach Onoir', :categories => ['Wehnimer\'s Landing', 'MHO']},
+    'wl-house_paupers' => {:name => 'Wehnimer\'s Landing - House Paupers', :shortname => 'House Paupers', :categories => ['Wehnimer\'s Landing', 'CHE']},
+    'wl-house_phoenix' => {:name => 'Wehnimer\'s Landing - House Of The Rising Phoenix', :shortname => 'House Of The Rising Phoenix', :categories => ['Wehnimer\'s Landing', 'CHE']},
+    'wl-house_sovyn' => {:name => 'Wehnimer\'s Landing - House Sovyn', :shortname => 'House Sovyn', :categories => ['Wehnimer\'s Landing', 'CHE']},
+    'wl-lysierian' => {:name => 'Wehnimer\'s Landing - Lysierian Hills', :shortname => 'Lysierian Hills', :categories => ['Wehnimer\'s Landing']},
+    'wl-mineroad' => {:name => 'Wehnimer\'s Landing - Old Mine Road', :shortname => 'Old Mine Road', :categories => ['Wehnimer\'s Landing']},
+    'wl-moot_hall' => {:name => 'Wehnimer\'s Landing - Moot Hall', :shortname => 'Moot Hall', :categories => ['Wehnimer\'s Landing']},
+    'wl-museum' => {:name => 'Wehnimer\'s Landing - Museum', :shortname => 'Museum', :categories => ['Wehnimer\'s Landing']},
+    'wl-rangerguild-v1' => {:name => 'Wehnimer\'s Landing - Ranger Guild', :shortname => 'Ranger Guild (WL)', :categories => ['Wehnimer\'s Landing', 'Guilds']},
+    'wl-rogue_guild' => {:name => 'Wehnimer\'s Landing - Rogue Guild', :shortname => 'Rogue Guild (Wehnimer\'s)', :categories => ['Wehnimer\'s Landing', 'Guilds']},
+    'wl-silvergate_inn' => {:name => 'Wehnimer\'s Landing - Silvergate Inn', :shortname => 'Silvergate Inn', :categories => ['Wehnimer\'s Landing', 'CHE']},
+    'wl-sorcerer_guild' => {:name => 'Wehnimer\'s Landing - Sorcerer Guild', :shortname => 'Sorcerer Guild (Wehnimer\'s)', :categories => ['Wehnimer\'s Landing', 'Guilds']},
+    'wl-spider_temple' => {:name => 'Wehnimer\'s Landing - Spider Temple', :shortname => 'Spider Temple', :categories => ['Wehnimer\'s Landing']},
+    'wl-stone_baths' => {:name => 'Wehnimer\'s Landing - Stone Baths', :shortname => 'Stone Baths', :categories => ['Wehnimer\'s Landing']},
+    'wl-stronghold' => {:name => 'Wehnimer\'s Landing - Stronghold and Thanatoph', :shortname => 'Stronghold/Thanatoph', :categories => ['Wehnimer\'s Landing']},
+    'wl-swale' => {:name => 'Wehnimer\'s Landing - Swale, The', :shortname => 'Swale, The', :categories => ['Wehnimer\'s Landing']},
+    'wl-sylvanfair' => {:name => 'Wehnimer\'s Landing - House Sylvanfair', :shortname => 'House Sylvanfair', :categories => ['Wehnimer\'s Landing', 'CHE']},
+    'wl-talador' => {:name => 'Wehnimer\'s Landing - Talador Festival Grounds', :shortname => 'Talador Festival Grounds', :categories => ['Wehnimer\'s Landing']},
+    'wl-talador-east' => {:name => 'Wehnimer\'s Landing - Talador Hunting East', :shortname => 'Talador Hunting East', :categories => ['Wehnimer\'s Landing']},
+    'wl-talador-west' => {:name => 'Wehnimer\'s Landing - Talador Hunting West', :shortname => 'Talador Hunting West', :categories => ['Wehnimer\'s Landing']},
+    'wl-trollfang' => {:name => 'Wehnimer\'s Landing - Upper Trollfang', :shortname => 'Upper Trollfang', :categories => ['Wehnimer\'s Landing']},
+    'wl-twilight_hall' => {:name => 'Wehnimer\'s Landing - Twilight Hall', :shortname => 'Twilight Hall', :categories => ['Wehnimer\'s Landing', 'CHE']},
+    'wl-wehnimers' => {:name => 'Wehnimer\'s Landing - Town Map', :shortname => 'Wehnimer\'s Landing', :categories => ['Wehnimer\'s Landing', 'Towns']},
+    'wl-wehntoph' => {:name => 'Wehnimer\'s Landing - Wehntoph', :shortname => 'Wehntoph', :categories => ['Wehnimer\'s Landing']},
+    'wl-willow_hall' => {:name => 'Wehnimer\'s Landing - Willow Hall', :shortname => 'Willow Hall', :categories => ['Wehnimer\'s Landing', 'CHE']},
+    'wl-wizard_guild' => {:name => 'Wehnimer\'s Landing - Wizard Guild', :shortname => 'Wizard Guild (Wehnimer\'s)', :categories => ['Wehnimer\'s Landing', 'Guilds']},
+}
+
+unknown_maps = Set.new
+Room.list.each do |room|
+    next unless room.image
+    id = room.image
+    if id =~ /^(.+)\.[^.]*$/
+        id = $1
+    end
+    if id =~ /^(.+)-\d+$/
+        id = $1
+    end
+    mapname = id.downcase
+    map = data[mapname]
+    unless map
+        echo "No such map: #{mapname}" if unknown_maps.add?(mapname)
+        next
+    end
+    map[:tags] ||= {}
+    map[:tags]['first'] ||= room
+    room.tags.each do |tag|
+        map[:tags][tag] ||= room
+    end if room.tags
+end
+
+no_tags = []
+data.each do |key, map|
+    unless map[:tags]
+        no_tags << key
+        next
+    end
+    %w(town voln supernode node first).each{|tag|
+        room = map[:tags][tag]
+        next unless room
+        tags = ["meta:mapname:#{map[:name]}"]
+        tags << "meta:mapshortname:#{map[:shortname]}" if map[:shortname] and map[:shortname] != map[:name]
+        tags += map[:categories].map{|k| "meta:mapcategory:#{k}"} if map[:categories]
+        room.tags ||= []
+        tags.each{|tag|
+            room.tags << tag unless room.tags.include?(tag)
+        }
+        echo "Map: #{key} -- Room: #{room.id} #{room.title[0]}"
+        # echo room.inspect
+        break
+    }
+end
+
+no_tags.each do |key|
+    echo "Map #{key} has no tags!"
+end
+

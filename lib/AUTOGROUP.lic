@@ -1,0 +1,18 @@
+#JOIN
+
+no_kill_all
+no_pause_all
+
+loop {
+	line = get
+	if line =~ /(.*) tried to join your group, but your group status is closed./
+		person = $1
+		fput "hold #{person}"
+	elsif line =~ /(.*) tried to hold your hand, but your group status is closed./
+		person = $1
+		fput "join #{person}"
+	elsif line =~ /(.*) tried to hold your hand, but you are a member/
+		person = $1
+		fput "join #{person}"
+	end
+}

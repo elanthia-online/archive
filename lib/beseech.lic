@@ -1,0 +1,12 @@
+#Will check for various things and Beseech if able
+#
+# tags: beseech, stunned, webbed, bound, 715, curse, paladin, hunting
+# version 2.0 (made it not poll so much)
+# author: Glaves
+
+loop{
+	wait_until {(stunned? or checkwebbed or checkdisease or checkpoison or bound? or Spell[715].active? or clear.any? { |line| line =~ /You are unable to change your stance|You don't seem to be able to move to do that|A feeling of defenselessness washes over you|You are unable to muster the will to attack anything/ }) and (mana >= 35)}
+	waitrt? 
+	waitcastrt?
+	fput 'beseech'
+	}

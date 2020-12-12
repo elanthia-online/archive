@@ -1,0 +1,59 @@
+=begin
+    	This script will only pick up things you set via lootlist variable (eg. ;Vars set lootlist=diamond|emerald|ruby)
+
+	It will place them in your default lootsack (eg. ;Vars set lootsack=cloak)
+
+	author: Ryjex
+=end
+
+silence_me
+
+if variable[1].downcase =~ /help/
+	Script.start("repo","info lootlist.lic");
+	exit
+end
+
+if Vars.lootlist.nil? or Vars.lootsack.nil?
+	echo "Set your lootlist and lootsack variables. See ;loot help"
+	exit
+end
+
+stored = false
+if !lefthand.nil? and !righthand.nil?
+	rightid = GameObj.right_hand.id
+	waitrt?
+	fput "stow ##{rightid}"
+	stored=true
+end
+
+waitrt?
+
+GameObj.npcs.each{ |mob|
+if mob.status =~ /dead/
+	waitrt?
+	fput "loot"
+end
+}
+waitrt?
+
+stored = false
+if !lefthand.nil? and !righthand.nil?
+	rightid = GameObj.right_hand.id
+	waitrt?
+	fput "stow ##{rightid}"
+	stored=true
+end
+
+waitrt?
+
+GameObj.loot.find_all { |obj| obj.name =~ /#{Vars.lootlist}/ }.each{ |item|
+	put "get ##{item.id}"
+	put "put ##{item.id} in my #{Vars.lootsack}"
+}
+waitrt?
+
+if stored
+waitrt?
+	fput "get ##{rightid}"
+end
+

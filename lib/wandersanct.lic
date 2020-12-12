@@ -1,0 +1,42 @@
+#  Wander out of sancted rooms when hunting
+#  This annoyed me, so i made this
+# version 1.0 (final)
+# tags: otf, sanct, wander
+# author: Glaves
+#
+#
+# Place your hunting boundries below inside the badrooms brackets
+
+
+def wander(badrooms = [11866, 11854, 11851, 12024, 12023, 11905])
+	if Room.current.id == 4
+		walk
+		return
+	end
+	broom = badrooms
+	badrooms = []
+	broom.each{|room| badrooms.push(room.to_s)}
+	$wander_last_room ||= nil
+	room = Room.current
+	options = Room.current.wayto.keys - badrooms
+	next_room_options = room.wayto.keys - badrooms
+	if next_room_options.length > 1
+		next_room_options.delete_if { |option| option == $wander_last_room }
+	end
+	next_room = next_room_options[rand(next_room_options.length)]
+	way = room.wayto[next_room]
+	if way.class == String
+		move(way)
+	else
+		way.call
+	end
+	$wander_last_room = room.id.to_s
+end
+
+
+while line = get
+  if line =~ /\Be at peace my child, there is no need to fight here\./
+	wander
+	end
+	end
+	

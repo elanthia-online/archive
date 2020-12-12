@@ -1,0 +1,162 @@
+=begin
+
+Wait for someone to whisper "Colors" to the bot, then cast 611 until the
+whole group has 4 hours of the spell going.
+
+Current revision: 2012.02.09.01
+
+=end
+
+# -----------------------------------------------------------------------------
+# Author:   Jymamon (gs4-jymamon@hotmail.com)
+#
+# History:
+#   2012.02.05.01 - Initial release - just a dumb loop
+#   2012.02.05.02 - Try to be smart about who is currently group with the bot
+#                   and how much time their spells have left.
+#   2012.02.09.01 - Added attempt to whisper to Staypuff for Obiwankenoobi
+# -----------------------------------------------------------------------------
+
+#
+# Get the active spells for a given character.
+#
+def getTargetSpells(target)
+    data = LNet.get_data(target, 'spells')
+
+    spell_data = nil
+
+    if data.nil? || data==false
+        spell_data = nil;
+    else
+        # I like hashes
+        spell_data = Hash.new
+
+        data.each_pair{|s,t|
+            spell_data[s] = t;
+        }
+    end
+
+    return(spell_data)
+end
+
+#
+# Return everyone currently in the same group as the caller.
+#
+def currentGroup
+    done  = false
+    group = Array.new
+
+    action = proc { |server_string|
+        if server_string.strip.length == 0
+            nil
+            next
+        end
+
+        if server_string =~ /^<a exist="-\d+" noun="(.*)">(?:.*)<\/a> is (?:the leader|also a member) of your group\.$/
+            group.push($1)
+            nil
+        elsif server_string =~ /^<a exist="-\d+" noun="(.*)">(?:.*)<\/a> is following you\./
+            group.push($1.to_s)
+            nil
+        elsif server_string =~ /Your group status is currently/
+            nil
+
+        elsif server_string =~ /You are not currently in a group/
+            nil
+
+        elsif server_string =~ /<prompt/
+            done = true
+            DownstreamHook.remove('Group_hook')
+            server_string
+
+        elsif server_string =~ /GROUP HELP/
+            done = true
+            DownstreamHook.remove('Group_hook')
+            nil
+
+        else
+            server_string
+        end
+    }
+
+    DownstreamHook.add('Group_hook', action)
+    silence_me unless undo_silence = silence_me
+    put 'group'
+    silence_me if undo_silence
+    wait_until { done }
+    return(group);
+end
+
+#
+# Loop forever waiting to hear the magic word.  No, it isn't 'Please'.
+#
+while (1)
+    # Don't spam Staypuff with whispers
+    last_whisper      = 0
+    whisper_frequency = 180
+
+    # Wait
+    line = waitfor("whispers, \"Colors")
+
+    # Who's in the group
+    group = currentGroup()
+
+    # This is will be set to how long we need to cast
+    cast_time     = 0
+    cast_duration = ((900 + (30 * Spells.ranger))/60).to_f
+
+    # For every group member
+    group.each{|m|
+        # Get their spell information
+        spells = getTargetSpells(m)
+
+        if ( spells.nil? )
+            # They suck and aren't sharing. Cast four hours
+            # worth.  Alternately, we could be a prick, too,
+            # and ignore them or remove them from the group.
+            cast_time = 240
+            break
+        elsif ( spells['601'].nil? )
+            cast_time = 240
+            break
+        elsif ( 240 - spells['601'].to_i > cast_time )
+            # We have spell information and they have less
+            # than 4 hours left.  Subtract the time left
+            # from the max time to cast to determine how
+            # much longer we can add to their stack.
+            cast_time = 240 - spells['601'].to_i
+        end
+    }
+
+
+    while ( cast_time > 0 )
+
+        while ( ! Spell[611].affordable? )
+
+            # If we haven't bothered Staypuff in the last whisper_frequency seconds
+            if ( (Time.now.to_i - whisper_frequency) > last_whisper  )
+                # And he's in the room
+                if checkpcs.include?('Staypuff')
+                    # Ask for mana
+                    fput "whisper staypuff mana 50"
+                    # And remember we bothered him
+                    last_whisper = Time.now.to_i
+
+                    # We could to an explicit check for mana being
+                    # sent, but we really don't care.  If he's out
+                    # and sends nothing, we'll still hit our normal
+                    # wait loop.
+                else
+                    pause 6
+                end
+            else
+                pause 6
+            end
+        end
+
+        Spell[611].cast
+        waitcastrt
+        cast_time = cast_time - cast_duration
+        respond "Casting #{cast_time} more minutes of 611 at #{cast_duration} per cast"
+    end
+end

@@ -1,0 +1,15 @@
+#
+#  Will use 2 LTEs once fried
+#
+
+wait_until { percentmind == 100 }
+waitrt?
+waitcastrt?
+fput "boost longt"
+
+sleep 3
+
+wait_until { percentmind == 100 }
+waitrt?
+waitcastrt?
+fput "boost longt"

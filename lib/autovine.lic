@@ -1,0 +1,29 @@
+#quiet
+=begin
+This script is supposed to be used as a bigshot hunting script and will cast a vine
+if more than two critters are in the room and one of them is not your companion. You need
+to edit the line below to change mongoose to whatever companion you have.
+
+~ SpiffyJr
+=end
+silence_me
+
+sleep 15
+
+loop {	
+	wait_while { running?('go2') }
+	flee_count = ((mongoose = GameObj.npcs.find { |npc| npc.noun =~ /mongoose/ }) ? (UserVars.op['flee_count'].to_i + 1) : UserVars.op['flee_count'].to_i) + 1
+	
+	if not GameObj.npcs.find { |npc| npc.noun =~ /wight/ } and not GameObj.pcs and ((not mongoose and GameObj.npcs.size > 1) or (mongoose and GameObj.npcs.size > 2)) and (GameObj.npcs.size < flee_count) and not GameObj.loot.find { |loot| loot.noun =~ /vine/ } and Spell[610].affordable?
+		pause_script('bigshot')
+		waitrt?
+		waitcastrt?
+		stance = checkstance
+		fput 'stance offensive'
+		fput 'inc 610'
+		fput "stance #{stance}"
+		unpause_script('bigshot')
+	end
+	
+	sleep 0.25
+}

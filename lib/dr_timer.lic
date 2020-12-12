@@ -1,0 +1,25 @@
+#dr_timer
+
+=begin
+	
+    Author: Alastir
+	contributor: (horibu on PC), original Nylis
+
+=end
+
+start_time = 0
+total_time = 0
+
+if $frontend == 'stormfront'
+	fam_window_begin = "<pushStream id=\"speech\" ifClosedStyle=\"watching\"/>"
+	fam_window_end   = "<popStream/>\r\n"
+else
+	fam_window_begin = "\034GSe\r\n"
+	fam_window_end   = "\034GSf\r\n"
+end
+
+loop {
+	send_to_script('lnet',"chat on DRCount [Counter Total for #{checkroom} is: #{Vars.CountIt} [#{Time.now}]")
+	respond "Current time is: #{Time.now}"
+	sleep 900
+	}

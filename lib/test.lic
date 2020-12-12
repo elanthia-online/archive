@@ -1,0 +1,43 @@
+@LTE_Boost_Num = 0
+@DBL_Boost_Num = 0
+
+def message(text)
+  string = ''
+  if $fake_stormfront then string.concat("\034GSL\r\n ") else string.concat("<pushBold\/>") end
+  if( text.index('\n') )
+    text.split('\n').each { |line| string.concat("| #{line}") }
+  else
+    string.concat('| ' + text)
+  end
+  if $fake_stormfront then string.concat("\034GSM\r\n ") else string.concat("<popBold\/>") end
+  _respond string
+end
+
+bigshot_boosts = proc {
+  action = proc { |server_string|
+    nil
+  }
+    DownstreamHook.add("#{script.name}_boosts", action)
+}
+
+check_boost = proc {
+  @CurrentMagic = 0
+  #bigshot_boosts.call
+  fput "boost info"
+  while (line = get)
+    if line =~ /^\s*Doubled Experience Boosts\:\s+([\d,]+)/
+      @DBL_Boost_Num = $1.to_i
+    elsif line =~ /^s*Long\-Term Experience Boosts\:\s+([\d,]+)/
+      @LTE_Boost_Num = $1.to_i
+    elsif line =~ /Fast Exp/
+      break
+    end
+  end
+  DownstreamHook.remove("#{script.name}_boosts")
+}
+
+check_boost.call
+#check_magic.call
+
+message("@DBL_Boost_Num #{@DBL_Boost_Num}")
+message("@LTE_Boost_Num #{@LTE_Boost_Num}")

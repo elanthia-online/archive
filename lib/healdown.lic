@@ -1,0 +1,46 @@
+echo "HEAL_DOWN"           
+leave_minors = ["neck","chest","back","abdomen","right leg","left leg","right arm","right leg"]           
+
+cure_wound = proc { |loc|
+  if loc =~ /right/
+    loc = loc.gsub(/(?<=[a-z])(?=[A-Z])/, ' ')
+  elsif loc =~ /left/
+    loc = loc.gsub(/(?<=[a-z])(?=[A-Z])/, ' ')
+  elsif loc =~ /nsys/
+    loc = "nerves"
+  end
+  if mana < 20
+    fput "tap"
+    wait_until {mana > 20}
+  end
+  fput "cure #{loc}"
+  sleep 0.2
+  waitrt?
+  waitcastrt?
+}
+XMLData.injuries.keys.each {|location|
+  if XMLData.injuries[location]["wound"] > 1 
+    until XMLData.injuries[location]["wound"] <= 1 
+     cure_wound.call(location)
+    end
+  end
+  if !leave_minors.include?(location)
+    until XMLData.injuries[location]["wound"] == 0 
+      cure_wound.call(location)
+    end
+  end
+  if XMLData.injuries[location]["scar"] > 1 
+    until XMLData.injuries[location]["scar"] <= 1 
+     cure_wound.call(location)
+    end
+  end
+  if !leave_minors.include?(location)
+    until XMLData.injuries[location]["scar"] == 0 
+     cure_wound.call(location)
+    end
+  end
+}
+
+until health == maxhealth
+  cure_wound.call("blood")
+end

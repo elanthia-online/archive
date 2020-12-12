@@ -1,0 +1,3 @@
+if mana < 40 && mana >= 16
+fput "incant 516"
+end

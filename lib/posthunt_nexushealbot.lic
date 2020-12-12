@@ -1,0 +1,108 @@
+=begin
+Author: Athias
+
+=end
+
+def disband_group()
+  # Specific for bigshot group hunting
+  fput "disband group"
+  sleep 5
+  fput "group open"
+  sleep 0.5
+end
+
+def leave_group()
+  # Specific for bigshot group hunting
+  multifput "leave group", "group open"
+  sleep 0.5
+end
+
+def go_sell_stuff()
+  # Go to FWI
+  fput "turn my armband"
+  sleep 0.5
+  start_script 'go2', ['3668']
+  wait_while {running? 'go2'}
+  sleep 0.5
+  
+  # Sell Loot
+  start_script 'sloot', ['sell']
+  wait_while {running? 'sloot'}
+  sleep 0.5
+  
+  # Go back from whence you came
+  fput "turn my armband"
+  sleep 0.5
+end
+
+def go2_nexus()
+  start_script 'go2', ['20239']
+  wait_while {running? 'go2'}
+  sleep 0.5
+end
+
+def join_and_heal()
+  # Join Tyrean
+  multifput "group open", "join Tyrean"
+  sleep 0.5
+
+  # Join Bruiser
+  multifput "group open", "join Bruiser"
+  sleep 0.5
+
+  # Join Wreck
+  multifput "group open", "join Wreck"
+  sleep 0.5
+
+  # Check for healing
+  start_script 'heal_spellup'
+  wait_while {running? 'heal_spellup'}
+  sleep 0.5
+
+  # Check for healing
+  start_script 'useherbs'
+  wait_while {running? 'useherbs'}
+  sleep 0.5
+end
+
+def wait_for_aneya()
+  fput "look"
+  while line = get
+    break if /Notaneya just arrived./ =~ line
+    break if /Also here:(.*?)Notaneya/ =~ line
+  end
+  sleep 0.5
+end
+
+def diskus()
+  # Stock up on mana
+  while XMLData.mana < 50
+    fput "whisper tyrean mana"
+    sleep 5
+  end
+  # Give disks to everyone
+  start_script 'diskus_shat'
+  wait_while {running? 'diskus_shat'}
+  sleep 0.5
+end
+
+def shaggle()
+  # Run shaggle
+  start_script 'waggle'
+  wait_while {running? 'waggle'}
+end
+
+def gimme_water_walking()
+  # Ask Alfred for water walking
+  fput "whisper Alfred water walking"
+end
+
+#disband_group
+#leave_group
+go_sell_stuff
+go2_nexus
+join_and_heal
+#wait_for_aneya
+#diskus
+shaggle
+#gimme_water_walking

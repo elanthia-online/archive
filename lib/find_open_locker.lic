@@ -1,0 +1,288 @@
+start_room = nil
+
+tv_find_open = proc {
+  movements = ["south","south","south","south","south","south","south","south","south","north","north","north","north","north","north","north","north","north"]
+  Script.run('go2',"public lockers tv --disable-confirm")
+  sleep 1
+  move "south"
+  fput "go curtain"
+  until XMLData.room_title =~ /Wyvern Keep, Public Locker/
+    fput "#{movements[0]}"
+    sleep 0.3
+    move "go curtain"
+    sleep 1
+    movements.rotate!
+  end
+}
+
+tv_exit = proc {
+  if XMLData.room_title =~ /Wyvern Keep, Public Locker/
+    move "go curtain"
+  end
+  until XMLData.room_title =~ /Wyvern Keep, Lobby/
+    fput "north"
+  end
+}
+
+sol_find_open = proc {
+  movements = ["east","south","south","west","north"]
+  Script.run('go2',"public lockers sol --disable-confirm")
+  sleep 1
+  fput "go opening"
+   until XMLData.room_title =~ /Locker Alcove/
+    fput "#{movements[0]}"
+    sleep 0.5
+    move "go opening"
+    sleep 1
+    movements.rotate!
+  end
+}  
+
+sol_exit = proc {
+  if XMLData.room_title =~ /Locker Alcove/
+    move "go opening"
+  end
+  Script.run('go2',"public lockers sol --disable-confirm")
+}
+
+wl_find_open = proc {
+  movements = ["east","east","east","north","north","south","south","south","south","north","north","west","west","west"]
+  Script.run('go2',"public lockers wl --disable-confirm")
+  sleep 1
+  move "east"
+  fput "go opening"
+   until XMLData.room_title =~ /Public Lockers/
+    fput "#{movements[0]}"
+    sleep 0.5
+    move "go opening"
+    sleep 1
+    movements.rotate!
+  end
+}  
+
+wl_exit = proc {
+  if XMLData.room_title =~ /Public Lockers/
+    move "go opening"
+  end
+  Script.run('go2',"public lockers wl --disable-confirm")
+}
+
+kd_find_open = proc {
+  movements = ["east","west"]
+  Script.run('go2',"public lockers kd --disable-confirm")
+  sleep 1
+  fput "go opening"
+   until XMLData.room_title =~ /Company Lockers/
+    fput "#{movements[0]}"
+    sleep 0.5
+    move "go opening"
+    sleep 1
+    movements.rotate!
+  end
+}  
+
+kd_exit = proc {
+  if XMLData.room_title =~ /Company Lockers/
+    move "go opening"
+  end
+  Script.run('go2',"public lockers kd --disable-confirm")
+}
+
+ti_find_open = proc {
+  movements = ["south","south","south","south","south","north","north","north","north","north","north","north","north","north","south","south","south","south","east","east","east","east","east","west","west","west","west","west"]
+  Script.run('go2',"public lockers ti --disable-confirm")
+  sleep 1
+   until XMLData.room_title =~ /Ta'Illistim Keep, Locker/
+    fput "#{movements[0]}"
+    sleep 0.5
+    move "go curtain"
+    sleep 1
+    movements.rotate!
+  end
+}  
+
+ti_exit = proc {
+  if XMLData.room_title =~ /Ta'Illistim Keep, Locker/
+    move "go curtain"
+  end
+  while XMLData.room_title !~ /Ta'Illistim Keep, Vaults/ && XMLData.room_exits.include?("north")
+   fput "north"
+  end
+  while XMLData.room_title !~ /Ta'Illistim Keep, Vaults/ && XMLData.room_exits.include?("south")
+   fput "south"
+  end
+  until XMLData.room_title =~ /Ta'Illistim Keep, Vaults/
+   fput "west"
+  end
+}
+
+rr_find_open = proc {
+  movements = ["east","up","north","up","west","up","south","up","east","west","down","north","down","east","down","south","down","west"]
+  Script.run('go2',"public lockers rr --disable-confirm")
+  sleep 1
+   until XMLData.room_title =~ /Public Lockers/
+    fput "#{movements[0]}"
+    sleep 0.5
+    move "go opening"
+    sleep 1
+    if !XMLData.room_exits.include?(movements[0]) && XMLData.room_exits.length > 1 && XMLData.room_title !~ /Timor's Storage, Lobby/
+      movements.rotate!
+      fput "#{movements[0]}"
+      sleep 0.5
+      move "go opening"
+      sleep 1
+      movements.rotate!
+    elsif XMLData.room_title =~ /Timor's Storage, Hallway/ && !XMLData.room_exits.include?(movements[0]) && XMLData.room_exits.length == 1 || XMLData.room_title =~ /Timor's Storage, Lobby/
+      movements.rotate!
+    end
+  end
+}  
+
+rr_exit = proc {
+  corners = {"west up" => "west","north down" => "down","south up" => "south","west down" => "down","east up" =>"east","south down" => "down","north up" => "north","east down" => "down"}
+  if XMLData.room_title =~ /Public Lockers/
+    move "go opening"
+  end
+  if XMLData.room_exits.include?("west")
+    direction = "west"
+  elsif XMLData.room_exits.include?("south")
+    direction = "south"
+  elsif XMLData.room_exits.include?("east")
+    direction = "east"
+  else 
+    direction = "north"
+  end
+  until XMLData.room_title =~ /Timor's Storage, Lobby/
+    until XMLData.room_exits.include?("up") || XMLData.room_exits.include?("down") && XMLData.room_exits.length == 2 || XMLData.room_title =~ /Timor's Storage, Lobby/
+      move direction
+      sleep 0.5
+    end
+    if XMLData.room_title =~ /Timor's Storage, Lobby/ then exit end
+    direction = corners[XMLData.room_exits.join(" ").to_s]
+    move direction
+    sleep 0.5 
+    if XMLData.room_exits.include?("north")
+      direction = "north"
+    elsif XMLData.room_exits.include?("south")
+      direction = "south"
+    elsif XMLData.room_exits.include?("east")
+      direction = "east"
+    else
+      direction = "west"
+    end   
+    move direction
+  end
+}
+
+im_find_open = proc {
+  movements = ["east","southeast","east","east","east","north","north","west","west","west","southwest","west"]
+  Script.run('go2',"public lockers im --disable-confirm")
+  sleep 1
+  move "east"
+  sleep 0.5
+  fput "go curtain"
+   until XMLData.room_title =~ /Clovertooth Hall, Locker Booth/
+    fput "#{movements[0]}"
+    sleep 0.5
+    move "go curtain"
+    sleep 1
+    movements.rotate!
+  end
+}  
+
+im_exit = proc {
+  if XMLData.room_title =~ /Clovertooth Hall, Locker Booth/
+    move "go curtain"
+  end
+  Script.run('go2',"public lockers im --disable-confirm")
+}
+
+zl_find_open = proc {
+  movements = ["west","west","west","west","east","east","east","east"]
+  Script.run('go2',"public lockers zl --disable-confirm")
+  sleep 1
+  move "go hallway"
+  fput "go curtain"
+  until XMLData.room_title =~ /Rockslinger's, Public Locker/
+    fput "#{movements[0]}"
+    sleep 0.3
+    move "go curtain"
+    sleep 1
+    movements.rotate!
+  end
+}
+
+zl_exit = proc {
+  if XMLData.room_title =~ /Rockslinger's, Public Locker/
+    move "go curtain"
+  end
+  until XMLData.room_title =~ /Rockslinger Relocation Services/
+    fput "east"
+  end
+}
+
+waiting = proc {
+  room_count = XMLData.room_count
+  respond "As soon as you exit the curtain the script will return you to a mapped room or your chosen destination"
+  wait_while {room_count == XMLData.room_count}
+}
+
+return_to_start = proc {
+  Script.run('go2',start_room)
+}
+
+start_room = Room.current.id.to_s
+echo script.vars[2].downcase
+if script.vars[1].downcase =~ /tv/
+  tv_find_open.call
+  waiting.call
+  sleep 1
+  tv_exit.call
+elsif script.vars[1].downcase =~ /sol/
+  sol_find_open.call
+  waiting.call
+  sleep 1
+  sol_exit.call
+elsif script.vars[1].downcase =~ /kd/
+  kd_find_open.call
+  waiting.call
+  sleep 1
+  kd_exit.call
+elsif script.vars[1].downcase =~ /wl/
+  wl_find_open.call
+  waiting.call
+  sleep 1
+  wl_exit.call
+elsif script.vars[1].downcase =~ /rr/
+  rr_find_open.call
+  waiting.call
+  sleep 1
+  rr_exit.call
+elsif script.vars[1].downcase =~ /im/
+  im_find_open.call
+  waiting.call
+  sleep 1
+  im_exit.call
+elsif script.vars[1].downcase =~ /zl/
+  zl_find_open.call
+  waiting.call
+  sleep 1
+  zl_exit.call
+elsif script.vars[1].downcase =~ /ti/
+  ti_find_open.call
+  waiting.call
+  sleep 1
+  ti_exit.call
+else 
+  respond "Please use one of these town abbreviations wl,imt,sol,zl,rr,kd,tv,ti"
+  respond "To return to the starting room add return after the town ;find_open_locker wl return"
+  respond "You may alternatively add a room number or any current tag ;find_open_locker imt 228" 
+end
+if script.vars[2].downcase =~ /return/
+   return_to_start.call
+elsif script.vars[2].downcase != nil 
+   echo script.vars[2]
+   Script.run('go2',script.vars[2].to_s)
+end
+  
+  

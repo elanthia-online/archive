@@ -1,0 +1,15 @@
+# Cast mmana leech at everything in the room once
+#
+# ~Glaves
+
+
+
+GameObj.targets.each { |mob|
+if Spell[516].affordable?
+	fput "target ##{mob.id}" 
+	fput "incant 516 ##{mob.id}"
+	waitcastrt?
+	waitrt?
+	sleep 1
+end
+}

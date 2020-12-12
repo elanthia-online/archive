@@ -1,0 +1,57 @@
+=begin
+
+Jvice commands:
+
+;jvice help <Shows this message>
+
+;jvice update <Updates Jnet collection>
+
+;jvice <Opens the GSIV-Jara FAQ & Help Site>
+
+Version 2.7 - Contact Jara if any bugs.
+
+=end
+
+if $SAFE > 0
+  echo "#{Char.name}, to open the FAQ or update your Jnet collection, this script needs to be trusted once. ;trust #{script.name.downcase}"
+  exit
+end
+
+if script.vars[1] == "update" || script.vars[1] == "Update"
+	echo
+	respond "I'm updating your Jnet collection."
+	echo
+	do_client(";repository download jfloo")
+	wait_while {running? "repository"}
+	do_client(";repository download jsort")
+	wait_while {running? "repository"}
+	do_client(";repository download jconvert")
+	wait_while {running? "repository"}
+	do_client(";repository download jur")
+	wait_while {running? "repository"}
+	do_client(";repository download jlsing")
+	wait_while {running? "repository"}
+	do_client(";repository download jvice")
+	wait_while {running? "repository"}
+	echo
+	respond "#{Char.name}, your Jnet collection has been updated."
+	echo
+	kill_script "jvice"
+elsif script.vars[1] == "help" || script.vars[1] == "Help"
+	echo
+	respond "#{Char.name}, here are Jvice commands:"
+	respond
+	respond ";jvice help <Shows this message>"
+	respond
+	respond ";jvice update <Updates Jnet collection>"
+	respond
+	respond ";jvice <Opens the GSIV-Jara FAQ & Help Site>"
+	respond
+	kill_script "jvice"
+else
+	echo
+	respond "I'm opening the GSIV-Jara FAQ & Help Site."
+	system("start explorer http://gsivjara.likesyou.org")
+	echo
+	kill_script "jvice"
+end

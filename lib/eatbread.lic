@@ -1,0 +1,7 @@
+if Spell[203].timeleft < 5 && Spell[203].affordable? 
+    cast 203
+    until checkright == nil
+      fput "eat my #{GameObj.right_hand.noun}"
+      sleep 1
+    end
+end

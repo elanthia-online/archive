@@ -1,0 +1,26 @@
+#This script tells you what your silvers converted to US Currency would be.
+#Version 1.0
+
+echo
+
+mysilvers = 0
+
+fput "bank account"
+while line = get
+
+if (line =~ /Total: (\d+)/)
+	mysilvers = $1.to_i
+	break
+end
+end
+
+echo
+
+usconvert = mysilvers.to_f / 125000.00
+
+respond "#{Char.name}, you have accumulated #{mysilvers.to_i} silvers.  Good Job!"
+
+echo 
+respond "After conversion, I determine you have $#{usconvert.round(2)} dollars worth of silvers in your Gemstone IV Bank Account."
+echo
+echo

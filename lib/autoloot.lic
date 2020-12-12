@@ -1,0 +1,81 @@
+=begin
+This will automatically loot everything in the room, if there are no enemies around.
+
+author: Ryjex
+
+# Name: AutoLoot
+# Categories: Loot
+# Tags: loot
+# Version: 1.0
+
+=end 
+
+silence_me
+hide_me
+
+loop {
+	targets = GameObj.npcs.select { |npc| npc.status !~ /dead|gone/i && npc.type =~ /aggressive npc/ } + GameObj.targets.select { |npc| npc.status !~ /dead|gone/i }
+    targets.delete_if { |npc| npc.noun =~ /child|traveller|scribe|merchant|dignitary|official|magistrate/i && npc.name !~ /ethereal|celestial|unworldly/i }
+    targets.delete_if { |npc| npc.noun =~ /^(?:arm|arms|grik|grik'trak|grik'mlar|grik'pwal|grik'tval|verlok|verlok'asha|verlok'cina|verlok'ar|imp|abyran|abyran'a|abyran'sa|grantris|igaesha|haze|rouk|brume|haar|murk|nyle|mist|smoke|vapor|fog|aishan|shien|darkling|shadowling|arashan)$/i}
+    targets.delete_if { |npc| npc.type =~ /companion|familiar/i && npc.type !~ /aggressive npc/i }
+    next if targets.size > 0
+
+	groundloot = GameObj.loot.select{|n|n.type =~ /gem|skin|uncommon|magic|jewelry|clothing|valuable|quest/ && n.type !~ /cursed|ammo/ && n.name !~ /black ora/}
+	groundcoins = !!GameObj.loot.find{|n|n.name =~ /coins/}
+	next if (GameObj.dead.size.to_i == 0 && groundloot.size.to_i == 0 && !groundcoins) 
+	next if Spell[9607].active?
+
+	unskinnable = /Grimswarm|thief|rogue|bandit|mugger|outlaw|highwayman|marauder|brigand|thug|robber|defender|sentry|siren|elemental|combatant|executioner/i
+
+	left_shield = !!(GameObj.left_hand.type =~ /armor/)
+	left_id = GameObj.left_hand.id.to_i
+	right_id = GameObj.right_hand.id.to_i
+	
+	waitrt?
+	fput "store left" if GameObj.left_hand.type =~ /armor|weapon/
+	
+	GameObj.dead.each{ |mob| 
+		put "skin ##{mob.id}" if (mob.name !~ unskinnable)
+		put "loot ##{mob.id}" 
+	}
+	
+	waitrt?
+	fput "loot room"
+	waitrt?
+	
+	# pick up stuff that loot room misses
+	GameObj.loot.select{|n|n.type =~ /clothing|uncommon|quest/ && n.name !~ /corroded bronze scaling fork/ }.each{ |o| 
+		put "get ##{o.id}"
+		put "put ##{o.id} in my #{Vars.lootsack}" 
+	}
+	
+	fput "get coins" if groundcoins
+	waitrt?
+
+	if checkarea == "Warcamp"
+		id = GameObj.loot.find { |obj| obj.name == "crude bone key" }.id.to_i
+		if id > 0
+			waitrt?
+			put "get ##{id}"
+			put "put ##{id} in my #{Vars.lootsack}"
+		end
+	end
+
+	waitrt?
+	
+	if left_id > 0
+		trycount = 0
+		while (GameObj.left_hand.id.to_i != left_id && trycount < 10) do
+			if left_shield
+				echo "getting shield"
+				dothistimeout "ready shield", 3, /off from over your shoulder/ # while GameObj.left_hand.id.to_i != left_id
+			else
+				echo "getting left item"
+				dothistimeout "get ##{left_id}", 3, /You remove a|You already have that/ 
+			end
+			trycount = trycount + 1
+		end
+	end
+	
+	pause 1
+}

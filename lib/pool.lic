@@ -1,0 +1,73 @@
+Script.run("go2","bank")
+fput "withdraw 10000 sil"
+Script.run("go2","locksmith pool")
+Script.run("foreach","box in inv;get;give worker 10 percent;give worker 10 percent;")
+fput "look in #{Char.name} disk"
+Script.run("foreach","box in #{Char.name} disk;get;give worker 10 percent;give worker 10 percent;")
+
+poolworker = GameObj.npcs.find{|npc| npc.name =~ /worker|attendant|greasy gnome|gnome boss|merchant|woman/}
+def trashbin
+	trashcontainers = /wastebarrel|wastebasket|crate|barrel|casket|bin|receptacle|basket/
+	(GameObj.loot.select{|item| item.name=~ trashcontainers && item.name !~ /disk/} + GameObj.room_desc.select{|item| item.name=~ trashcontainers && item.name !~ /disk/}).first
+end
+
+def trash(item_id)
+	if !!trashbin
+		res = dothistimeout "put ##{item_id} in ##{trashbin.id}", 2, /^Are you crazy|cleaned up the surrounding area/
+		if res =~ /^Are you crazy/
+			fput "drop ##{item_id}"
+			fput "drop ##{item_id}"
+		end
+	else
+		fput "drop ##{item_id}"
+		fput "drop ##{item_id}"
+	end
+end
+
+	loop{
+		res = dothistimeout "ask ##{poolworker.id} for return",2,/We don't have any boxes|Alright, here's your/
+		if res =~ /We don't have any boxes/
+			break
+		elsif res =~ /Alright, here's your/
+			if GameObj.right_hand.type =~ /box/
+					box_id = GameObj.right_hand.id
+					res = dothistimeout "open ##{box_id}", 2, /You open|That is already open|It appears to be locked/
+					if res =~ /You open|That is already open/
+						waitrt?
+						dothistimeout "loot ##{box_id}", 3, /which you promptly stow away|There is no loot inside/
+						waitrt?
+						fput "get my coins"
+					end
+					res = dothistimeout "look in ##{box_id}", 2, /^There is nothing in the|It appears to be locked|That is closed| plate/
+					waitrt? # this applies to loot above, not look
+					if res =~ /^There is nothing in the| plate/
+						trash(box_id) #if !emptyhands
+					elsif res =~ /It appears to be locked|That is closed\./
+						fput "put ##{box_id} in my #{Vars.lootsack}"
+						return
+					else
+						fput "empty ##{box_id} in my #{Vars.lootsack}"
+						waitrt?
+						if dothistimeout "look in ##{box_id}", 2, /^There is nothing in the/
+							trash(box_id)
+						else
+							echo "*** ALERT *** SOMETHING WRONG WITH THE BOX"
+							pause_script
+						end
+					end
+			elsif GameObj.right_hand.type =~ /plinite/
+				fput "pluck my plinite"
+				waitrt?
+				fput "stow all"
+			else
+				echo "*** ALERT *** something went wrong, he gave us the box back but we don't see it"
+				pause_script
+			end
+		else
+			echo "*** ALERT *** something went wrong with parsing worker's response to us"
+			pause_script
+		end
+	}
+	
+Script.run("go2","bank")
+fput "deposit all"

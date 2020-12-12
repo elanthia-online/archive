@@ -1,0 +1,26 @@
+
+# Get a bless
+def bless_wraps()
+  get_glove = dothistimeout "remove my gauntlets", 3, /You remove some leather gauntlets from your hands.|Remove what?/
+  if get_glove =~ /You remove some leather gauntlets from your hands./
+    dothistimeout "whisper alfred bless", 5, /A brilliant shower of sparks bursts from your leather gauntlets|A searing white light enfolds your leather boots/
+  end
+  fput "wear my gauntlets"
+
+  get_boots = dothistimeout "remove my boots", 3, /You take some leather boots off your feet.|Remove what?/
+  if get_boots =~ /You take some leather boots off your feet./
+    dothistimeout "whisper alfred bless", 5, /A brilliant shower of sparks bursts from your leather gauntlets|A searing white light enfolds your leather boots/
+  end
+  fput "wear my boots"
+end
+
+
+# Monitor
+while line = get
+  if line =~ /bigshot: Need a blessing on weapon to continue hunting/
+    bless_wraps
+    wait_while {running? 'bigshot'}
+    sleep 0.5
+    start_script 'bigshot'
+  end
+end 

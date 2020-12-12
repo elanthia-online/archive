@@ -1,0 +1,42 @@
+left_hand = nil
+unsafe_spell = [435]
+
+
+if script.vars[1]
+	spell_num = script.vars[1]
+else
+	spell_num = 1750
+end
+loop do
+	waitfor "RECOVER ITEM"
+	if GameObj.left_hand
+		left_hand = GameObj.left_hand.id
+	end
+	Script.pause('bigshot')
+	UserVars.recover_room = Room.current.id
+	echo "ITEM DROPPED....ATTEMPING TO RETRIEVE"
+	waitrt?
+	waitcastrt?
+	sleep 0.2
+	if checkdead
+		exit
+	end
+	if Spell[spell_num].known? && Spell[spell_num].affordable? && !unsafe_spell.include?(spell_num.to_i)
+		cast spell_num
+		waitcastrt?
+		waitrt?
+	end
+	
+	multifput 'stance def','kneel','stow all'
+	dothis "recover item",/and recover it!|You find nothing recoverable./
+	waitrt?
+	until standing?
+		fput "stand"
+		sleep 0.2
+	end
+	waitrt?
+	if left_hand
+		fput "get ##{left_hand}"
+	end
+	Script.unpause('bigshot')
+end

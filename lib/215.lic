@@ -1,0 +1,100 @@
+=begin
+
+	Bravery group buff upkeep
+	
+	name: 215
+	author: Glaves
+	Version: 1.0b
+	tags: 215, heroisam, group
+	
+	Launching the script just by typing ;211 will scan your group and keep the spell up on everybody
+	You may also select specific people to make sure the buff is on by launching it as ;211 <player name> <player name> <etc etc etc>
+	
+=end
+
+
+
+def getTargetSpells(target)	
+    data = LNet.get_data(target, 'spells')
+
+    spell_data = nil
+
+    if data.nil? || data==false
+        spell_data = nil;
+    else
+        spell_data = Hash.new
+
+        data.each_pair{|s,t|
+            spell_data[s] = t;
+        }
+    end
+end
+
+def currentGroup
+    done  = false
+    group = Array.new
+
+    action = proc { |server_string|
+        if server_string.strip.length == 0
+            nil
+            next
+        end
+
+        if server_string =~ /^<a exist="-\d+" noun="(.*)">(?:.*)<\/a> is (?:the leader|also a member) of your group\./
+            group.push($1)
+            nil
+        elsif server_string =~ /^<a exist="-\d+" noun="(.*)">(?:.*)<\/a> is following you\./
+            group.push($1.to_s)
+            nil
+        elsif server_string =~ /Your group status is currently/
+            nil
+
+        elsif server_string =~ /You are not currently in a group/
+            nil
+
+        elsif server_string =~ /<prompt/
+            done = true
+            DownstreamHook.remove('Group_hook')
+            server_string
+
+        elsif server_string =~ /GROUP HELP/
+            done = true
+            DownstreamHook.remove('Group_hook')
+            nil
+
+        else
+            server_string
+        end
+    }
+
+    DownstreamHook.add('Group_hook', action)
+    silence_me unless undo_silence = silence_me
+    put 'group'
+    silence_me if undo_silence
+    wait_until { done }
+    return(group);
+end
+ 
+	if script.vars[1]
+		group = script.vars[0].split
+	else
+		group = currentGroup()
+	end
+	
+
+  cast(215)
+
+
+loop{
+
+  sleep 30
+  group.each{|m|
+
+        spells = getTargetSpells(m)
+
+        if ( spells['215'].nil?) && ! ( spells['215']) && Spell[215].affordable?
+        cast(215)
+        waitcastrt?
+    end
+    }
+}

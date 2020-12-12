@@ -1,0 +1,14 @@
+def spells_410(target = false)
+		 Spell[410].known? && Spell[410].affordable?
+			Spell[410].cast
+			waitrt?
+			waitcastrt?
+end
+
+
+
+	if GameObj.npcs.find_all{|npc| !['tiger', 'sloth', 'wolf', "Leia"].include?(npc.noun)}.length >= 3
+		if mana?(20)
+			spells_410
+		end
+	end

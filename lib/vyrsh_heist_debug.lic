@@ -1,0 +1,223 @@
+# ;e 3.times{fput("get my pipe from my rucksack");sleep 1.0;2.times{fput("give ##{GameObj.right_hand.id} to ring")}}
+
+if $frontend == 'stormfront'
+  fam_window_begin = "<pushStream id=\"familiar\" ifClosedStyle=\"watching\"/>"
+  fam_window_end   = "<popStream/>\r\n"
+else
+  fam_window_begin = "\034GSe\r\n"
+  fam_window_end   = "\034GSf\r\n"
+end
+
+def standing()
+  fput "stand" until standing?
+end
+
+def pouch_processing(storage_container)
+  fput("open my pouch")
+  sleep 0.1
+  fput("look in my pouch")
+  sleep 0.1
+  GameObj["pouch"].contents.each{ |item|
+    if item.name =~ /black ora/ || item.noun =~ /ball & chain|ball and chain|foot|vial/
+      sleep 0.1 
+    else
+      fput("get ##{item.id} from my pouch")
+      fput("put my #{item.noun} in my #{storage_container}")
+      sleep 0.1
+    end
+  }
+  if GameObj["pouch"].contents.length == 0
+    fput("throw my pouch")
+    sleep 0.1
+  else
+    multifput("throw my pouch","throw my pouch")
+    sleep 0.1
+  end
+end
+
+def get_simucoin_item(storage_container, simucoin_item)
+  empty_hands
+  result = dothistimeout("get my #{simucoin_item} from my #{storage_container}", 5, /You remove|Get what\?/)
+  if result =~ /You remove/
+    sleep 0.5
+  elsif result =~ /Get what\?/
+    5.times{
+      respond "You do not have anymore #{simucoin_item}\'s left"
+    }
+    exit
+  end
+end
+
+def storage(storage_container)
+  @remember = GameObj.right_hand.noun
+  fput "put #{GameObj.right_hand.noun} in my #{storage_container}" if GameObj.right_hand.id
+end
+
+if GameObj.right_hand.noun =~ /pouch/
+  pouch_processing(script.vars[1])
+  exit
+end
+
+enhancives_enabled = false
+
+before_dying{
+# fput ("inv enh off")
+  puts("#{fam_window_begin}-- \r\n#{fam_window_end}")
+  puts("#{fam_window_begin}-- Average Time: #{Time.at(@avg_time).strftime("%M:%S")} \r\n#{fam_window_end}")
+  puts("#{fam_window_begin}-- Total Heists: #{@avg_time_counter} \r\n#{fam_window_end}")
+  puts("#{fam_window_begin}-- \r\n#{fam_window_end}")
+}
+
+#fput("inv enh on")
+
+@avg_pool = 0
+@avg_time = 0
+@avg_time_counter = 0
+
+@overall_start_time = Time.now
+
+1.times{
+  if Room.current.id != 26136
+    start_script( 'go2', [ 'heist' , '_disable_confirm_' ] )
+    sleep 1.0
+    wait_while {running?('go2')}
+    sleep 1.0
+  end
+  30.times{
+    @avg_time_counter += 1
+    get_simucoin_item(script.vars[1], script.vars[2])
+    multifput("raise gauntlet","stance offensive","go bandit")
+    sleep 0.1
+    fput("put #{script.vars[2]} in my #{script.vars[1]}") if ['booklet', 'jar'].include?(script.vars[2].downcase) && GameObj.right_hand.id
+    sleep 0.1
+    round_counter = 0
+    start_time = Time.now
+    Spell[506].cast if Spell[506].affordable?
+    sleep 3.1
+    multifput("stance off", "prep 610", "cast")
+    5.times{
+      round_counter += 1
+      fput("hide") if !hidden?
+      sleep 0.5
+      waitrt?
+      result = dothistimeout(
+        "obs",
+        10,
+        /strides in|perhaps pace around to make/
+      )
+      if result =~ /strides in|stride in/
+        waitrt?
+        wait_until { count_npcs > 0 }
+        waitrt?
+        waitcastrt?
+        wait_while{ stunned? }
+        while GameObj.npcs
+          if count_npcs > 4
+            fput "incant 635" if (Spell[635].affordable?)
+            waitrt?
+            waitcastrt?
+          end
+          target = GameObj.npcs.find{ |npc| npc.name =~ // }
+          waitrt? if !(target.status =~ /dead|gone/)
+          waitcastrt? if !(target.status =~ /dead|gone/)
+          while target.status !~ /dead|gone/
+            if target.name !~ /automaton/ && !(target.status =~ /dead|gone/) && GameObj.npcs
+              waitrt?
+              waitcastrt?
+              if target.name =~ /marauder/
+                fput "incant 616" if (Spell[616].affordable?)
+                while !(target.status =~ /dead|gone/) && GameObj.npcs
+                  waitrt?
+                  if round_counter == 5
+                    fput ("symbol sleep")
+                    sleep 0.5
+                    waitrt?
+                    waitcastrt?
+                  end
+                  fput("fire")
+                  sleep 0.5
+                end
+              else
+                while !(target.status =~ /dead|gone/) && GameObj.npcs
+                  waitrt?
+                  if round_counter == 5
+                    fput ("symbol sleep")
+                    sleep 0.5
+                    waitrt?
+                    waitcastrt?
+                  end
+                  fput("fire")
+                  sleep 0.5
+                end
+              end
+            end
+          end
+          waitrt?
+          fput ("loot") if target.status =~/dead|gone/
+          sleep 0.5
+          if mana.to_i < 5
+            break
+          end
+        end
+      elsif result =~ /perhaps pace around to make/
+        waitrt?
+        sleep 0.1
+        fput("pace")
+        sleep 0.1
+      end
+      sleep 0.1
+      storage(script.vars[1])
+    echo "Round Counter is at #{round_counter}"
+      if round_counter < 5
+        result = dothistimeout(
+          "steal",
+          10,
+          /Bank of Bloodriven/
+        )
+      else
+        fput("steal")
+        sleep 1.0
+        waitrt?
+        sleep 0.1
+        #echo GameObj.right_hand.noun
+        #echo GameObj.right_hand.id
+        #fput("glance")
+        #sleep 0.1
+        storage(script.vars[1])
+        sleep 0.1
+      end
+    }
+    sleep 0.1
+    waitrt?
+    fput("drop bow")
+    end_time = Time.now - start_time
+    end_time = end_time.round(2)
+    @avg_pool = @avg_pool + end_time
+    @avg_time = @avg_pool / @avg_time_counter.to_i
+    @overall_runtime = Time.now - @overall_start_time
+    @overall_runtime = @overall_runtime.round(2)
+    time_wasted = @overall_runtime - @avg_pool
+    average_overall_time = @overall_runtime / @avg_time_counter.to_i
+    bloodscrip_rate = ( 3600 / average_overall_time ) * 265
+    bloodscrip_rate = bloodscrip_rate.round(0)
+    puts("#{fam_window_begin}-- \r\n#{fam_window_end}")
+    puts("#{fam_window_begin}-- Heist Time: #{Time.at(end_time).strftime("%M:%S")} \r\n#{fam_window_end}")
+    puts("#{fam_window_begin}-- Average Time: #{Time.at(@avg_time).strftime("%M:%S")} \r\n#{fam_window_end}")
+    puts("#{fam_window_begin}-- Total Heists: #{@avg_time_counter} \r\n#{fam_window_end}")
+    puts("#{fam_window_begin}-- \r\n#{fam_window_end}")
+    puts("#{fam_window_begin}-- Overall Runtime: #{Time.at(@overall_runtime).strftime("%M:%S")} \r\n#{fam_window_end}")
+    puts("#{fam_window_begin}-- Scrip Per Hour: #{bloodscrip_rate} \r\n#{fam_window_end}")
+    puts("#{fam_window_begin}-- \r\n#{fam_window_end}")
+    puts("#{fam_window_begin}-- Time wasted: #{Time.at(time_wasted).strftime("%M:%S")} \r\n#{fam_window_end}")
+    puts("#{fam_window_begin}-- Average Total Time: #{Time.at(average_overall_time).strftime("%M:%S")} \r\n#{fam_window_end}")
+    puts("#{fam_window_begin}-- \r\n#{fam_window_end}")
+    wait_until { GameObj.right_hand.noun =~ /pouch/ || GameObj.left_hand.noun =~ /pouch/ }
+    pouch_processing(script.vars[1])
+#    #move("nw")
+#    #move("nw")
+#    #multifput("get #{@remember} from #{script.vars[1]}","give #{@remember} to ringleader","give #{@remember} to ringleader")
+#    #move("se")
+#    #move("ne")
+    multifput("nw","nw","get #{@remember} from #{script.vars[1]}","give ringleader","give ringleader","se","ne")
+  }
+}

@@ -1,0 +1,44 @@
+
+	groundloot = GameObj.loot.select{|n|n.type =~ /gem|skin|uncommon|magic|jewelry|clothing|valuable|quest/ && n.type !~ /cursed|ammo/ && n.name !~ /black ora|doomstone|obvilion quartz|urglaes fang/}
+	groundcoins = !!GameObj.loot.find{|n|n.name =~ /coins/}
+	exit if (GameObj.dead.size.to_i == 0 && groundloot.size.to_i == 0 && !groundcoins) 
+
+	if SecondsSince(Vars.lastloot) < 1
+		#echo "TOO SOON"
+		exit
+	end
+	
+	## phylactery ##
+	while GameObj.loot.select{|item|item.name =~ /ancient gnarled bone phylactery/}.size.to_i > 0
+		fput "ambush phylactery"
+		waitrt?
+	end
+	
+	unskinnable = /Grimswarm|thief|rogue|bandit|mugger|outlaw|highwayman|marauder|brigand|thug|robber|defender|sentry|siren|elemental|combatant|executioner/i
+
+	left_id = GameObj.left_hand.id.to_i
+
+	waitrt?
+	fput "store left" if left_id > 0
+	
+	GameObj.dead.each{ |mob| 
+		put "skin ##{mob.id}" if (mob.name !~ unskinnable)
+		put "loot ##{mob.id}" 
+	}
+	
+	waitrt?
+	fput "loot room"
+	waitrt?
+	
+	# pick up stuff that loot room misses
+	GameObj.loot.select{|n|n.type =~ /clothing|uncommon|quest/ && n.name !~ /corroded bronze scaling fork|backpack|knapsack|doomstone|obvilion quartz|urglaes fang/ }.each{ |o| 
+		put "get ##{o.id}"
+		put "put ##{o.id} in my #{Vars.lootsack}" 
+	}
+	
+	fput "get coins" if groundcoins
+	waitrt?
+
+	fput "get ##{left_id}" if left_id > 0
+
+	Vars.lastloot = Time.now.to_f

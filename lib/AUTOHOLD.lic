@@ -1,0 +1,9 @@
+#Automated grouping.
+
+loop {
+	line = get
+	if line =~ /(.*) just arrived./
+		person = $1
+		fput "hold #{person}"
+	end
+}

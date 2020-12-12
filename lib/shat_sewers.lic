@@ -1,0 +1,327 @@
+=begin
+author: Athias
+date: 8/13/19
+
+This script is based on Alastir's sewers script.  It is highly customized for shattered.
+
+  Step 1:  Set the required variables
+           ;vars set lootsack=(container)
+           ;vars set keepsack=(container)
+           ;vars set bookletsack=(container)
+           ;vars set shat_cubby=(name)
+  Step 2:  ;shat_sewers
+  Step 3:  ????
+  Step 4:  profit
+ 
+=end
+
+if $SAFE > 0
+  echo "error: This script needs to be trusted to work. (;trust #{script.name.downcase})"
+  exit
+end
+
+if ( !Script.exists?('foreach') )
+  respond 'This script requires the foreach script by LostRanger'
+  respond ''
+  respond 'Get it by downloading it:'
+  respond '  ;repo download foreach.lic'
+  respond ''
+  exit
+end
+
+if ( !Vars.lootsack || !Vars.keepsack || !Vars.bookletsack || !Vars.shat_cubby )
+  respond 'This script requires the variables to be set:'
+  respond '  ;vars set lootsack=(container)'
+  respond '  ;vars set keepsack=(container)'
+  respond '  ;vars set bookletsack=(container)'
+  respond '  ;vars set shat_cubby=(name)'
+  exit
+end
+
+respond 'This script provided by Athias'
+respond 'This is highly customized for Shattered'
+respond ''
+respond '-----'
+respond 'Variables used:'
+respond '  Vars.lootsack = Where to store generic treasure'
+respond "  Vars.lootsack is currently set to #{Vars.lootsack}"
+respond ''
+respond '  Vars.keepsack = Where to store important treasure'
+respond "  Vars.keepsack is currently set to #{Vars.keepsack}"
+respond ''
+respond '  Vars.bookletsack = Where to store your booklet'
+respond "  Vars.bookletsack is currently set to #{Vars.bookletsack}"
+respond ''
+respond '  Vars.shat_cubby = Your Cubby Name'
+respond "  Vars.shat_cubby is currently set to #{Vars.shat_cubby}"
+respond '-----'
+respond ''
+respond 'If you are ready to start:'
+respond '  ;unpause shat_sewers'
+pause_script
+
+if (Vars.lootsack == Vars.keepsack) || (Vars.lootsack == Vars.bookletsack) || (Vars.keepsack == Vars.bookletsack)
+  respond 'Each of the Variables below should be unique'
+  respond '  ;vars set lootsack=(container)'
+  respond '  ;vars set keepsack=(container)'
+  respond '  ;vars set bookletsack=(container)'
+  exit
+end
+
+if ( Room.current.id != 288 )
+  echo "This script works best by starting from the small park..."
+  echo "Going there in 5"
+  pause 5
+  start_script "go2", ["288"]
+  wait_while { running? 'go2' }
+end
+
+multifput "quest transport dusk","quest transport dusk"
+
+if $frontend == 'stormfront'
+    fam_window_begin = "<pushStream id=\"speech\" ifClosedStyle=\"watching\"/>"
+    fam_window_end   = "<popStream/>\r\n"
+else
+    fam_window_begin = "\034GSe\r\n"
+    fam_window_end   = "\034GSf\r\n"
+end
+
+def stand()
+    until(standing?)
+    fput "stance offensive" unless checkstance == "offensive"
+    fput "stand"
+    end
+end
+
+def beforesewers
+  loop {
+    waitrt?
+    if checkroom "Bloodriven Village, Cesspool"
+      sleep 0.5
+      if checkstunned
+        if Spell[1635].known? and Spell[1635].affordable?
+          fput "beseech"
+        end
+        if Spell[1040].known? and Spell[1040].affordable?
+          fput "shout 1040"
+        end
+      end
+      wait_while {checkstunned}
+      waitrt?
+      stand
+      move "climb rope"
+      move out
+    elsif Room.current.id == 23759
+      nil
+    elsif checkroom "Bloodriven Village, Sewer"
+      break
+    end
+    stand
+    if checkright or checkleft
+      fput "store all"
+    end
+    if percentencumbrance > 10
+      waitrt?
+      start_script "go2", ["20536"]
+      wait_while { running? 'go2' }
+      fput "go wagon"
+      pause 2
+      start_script "go2", ["pawnshop"]
+      wait_while { running? 'go2' }
+      start_script "foreach", ["all in #{Vars.lootsack};get item;sell item;put note in my #{Vars.keepsack};put item in my #{Vars.keepsack}"]
+      wait_while { running? 'foreach' }
+      start_script "go2", ["bank"]
+      wait_while { running? 'go2' }
+      fput "deposit all"
+      start_script "go2", ["20728"]
+      wait_while { running? 'go2' }
+      start_script "foreach", ["all in my #{Vars.keepsack};get item;put item in #{Vars.shat_cubby} cubby"]
+      wait_while { running? 'foreach' }
+      start_script "go2", ["288"]
+      wait_while { running? 'go2' }
+      multifput "quest transport dusk","quest transport dusk"
+    end
+    
+    start_script "go2", ["20578"]
+    wait_while { running? 'go2' }
+     
+    fput "go ladder"
+    result = dothistimeout("get my booklet", 5, /You remove|Get what\?/)
+    if result =~ /You remove/
+      move "go grate"
+      fput "put my booklet in my #{Vars.bookletsack}"
+    elsif result =~ /Get what\?/
+      5.times{
+        respond 'Out of booklets!'
+      }
+      kill_script ("shat_sewers")
+    end
+    stand
+    move up
+    move up
+    move out
+    break
+  }
+end
+
+def cesspoolcheck
+  if checkroom "Bloodriven Village, Cesspool"
+    if checkstunned
+      if Spell[1635].known? and Spell[1635].affordable?
+        fput "beseech"
+      end
+      if Spell[1040].known? and Spell[1040].affordable?
+        fput "shout 1040"
+      end
+    end
+    wait_while {checkstunned}
+    beforesewers
+  else
+    checkpaths
+    walk
+  end
+end
+
+def stash_valueables()
+  waitrt?
+  if GameObj.right_hand.name =~ /a (.*) crystal|burlap sack|flat etched stone|handful of sparkling dust|material swatch|silver raffle token|slender wooden rod|strand of venoim thread/
+    stash_valueables_result = dothistimeout((fput "put ##{GameObj.right_hand.id} in my #{Vars.keepsack}"), 5, /You put|won\'t fit in the/)
+    if stash_valueables_result =~ /You put/
+      sleep 0.1
+    elsif stash_valueables_result =~ /won\'t fit in the/
+      respond "Your valueables container - #{Vars.keepsack} - is full!"
+      respond "It\'s time for you to unload stuff and figure it out yourself"
+      exit
+    end
+    waitrt?
+  elsif GameObj.right_hand
+    stash_valueables_result = dothistimeout((fput "put ##{GameObj.right_hand.id} in my #{Vars.lootsack}"), 5, /You put|won\'t fit in the/)
+    if stash_valueables_result =~ /You put/
+      sleep 0.1
+    elsif stash_valueables_result =~ /won\'t fit in the/
+      respond "Your general loot container - #{Vars.lootsack} - is full!"
+      respond "It\'s time for you to unload stuff and figure it out yourself"
+      exit
+    end
+    waitrt?
+  elsif GameObj.left_hand
+    stash_valueables_result = dothistimeout((fput "put ##{GameObj.left_hand.id} in my #{Vars.lootsack}"), 5, /You put|won\'t fit in the/)
+    if stash_valueables_result =~ /You put/
+      sleep 0.1
+    elsif stash_valueables_result =~ /won\'t fit in the/
+      respond "Your general loot container - #{Vars.lootsack} - is full!"
+      respond "It\'s time for you to unload stuff and figure it out yourself"
+      exit
+    end
+    waitrt?
+  else
+    respond "I could not find whatever you were attempting to stash away!"
+    respond 'Please investigate and restart the script'
+    exit
+  end
+end
+
+def searchsewers
+  loop {
+    if $frontend == 'stormfront'
+      fam_window_begin = "<pushStream id=\"speech\" ifClosedStyle=\"watching\"/>"
+      fam_window_end   = "<popStream/>\r\n"
+    else
+      fam_window_begin = "\034GSe\r\n"
+      fam_window_end   = "\034GSf\r\n"
+    end
+
+    if checkright and checkleft
+      fput "stow all"
+      echo "Hands were full."
+    end
+
+    if checkstunned
+      break
+    end
+
+    result = dothistimeout("search", 5, /You search around and find (\d+) bloodscrip\!|You search around and find a cache of (\d+) bloodscrip\!|You search around and find a (.*) crystal\!|You search around and find an odd gem\!|You search around and find a flat etched stone!|You search around and find a handful of sparkling dust|You search around and find a material swatch!|You search around and find a silver raffle token!|You search around and find a slender wooden rod!|You search around and find a strand of veniom thread|You search around and find (.*)\!|You search around the area and find (.*) rat\!|You\'ve recently searched this area|You've recently searched this area|As you begin to search the area\, a wave of sewage|You search around the area and find a small rat, but it scurries off before you can catch it\!|You don't find anything of interest here./)
+    if result =~ /You search around and find (\d+) bloodscrip\!/
+      puts("#{fam_window_begin}Found #{$1} bloodscrip.\r\n#{fam_window_end}")
+      wait_while {checkstunned}
+      waitrt?
+      cesspoolcheck
+    elsif result =~ /You search around and find a cache of (\d+) bloodscrip\!/
+      puts("#{fam_window_begin}Found a cache of bloodscrip worth #{$+}!\r\n#{fam_window_end}")
+      waittimes_while {checkstunned}
+      5.times{
+        respond "* Congrats!!  You won a cache of bloodscrip!"
+      }
+      sleep 3
+      waitrt?
+      cesspoolcheck
+    elsif result =~ /You search around and find a (.*) crystal\!|You search around and find a flat etched stone\!/
+      puts("#{fam_window_begin}Found a moonshard pendant consumable.\r\n#{fam_window_end}")
+      wait_while {checkstunned}
+      respond "* Congrats!!  You won a potential bloodrune!"
+      respond "* You can read the crystal (once) or look at it to see letters/symbols!"
+      respond "* You can then go to the following link to see which one you've won."
+      respond "* https://gswiki.play.net/MoonShard_pendant *"
+      respond "* Congrats!!  You won a potential bloodrune!"
+      stash_valueables
+      cesspoolcheck
+    elsif result =~ /You search around the area and find (.*) rat\!/
+      puts("#{fam_window_begin}Found a rat!\r\n#{fam_window_end}")
+      wait_while {checkstunned}
+      stash_valueables
+      cesspoolcheck
+    elsif result =~ /You search around and find an odd gem\!/
+      puts("#{fam_window_begin}Found a WPS smithy invite!\r\n#{fam_window_end}")
+      5.times{
+        respond "* Congrats!!  You found an invitation to the WPS Smithy!"
+      }
+      stash_valueables
+      cesspoolcheck
+    elsif result =~ /You search around and find a silver raffle token\!/
+      puts("#{fam_window_begin}Found a treasure trove raffle token!\r\n#{fam_window_end}")
+      5.times{
+        respond "* Congrats!!  You found a Treasure Trove raffle token!"
+      }
+      stash_valueables
+      cesspoolcheck
+    elsif result =~ /You search around and find a handful of sparkling dust\!|You search around and find a material swatch\!|You search around and find a slender wooden rod\!|You search around and find a strand of veniom thread\!/
+      puts("#{fam_window_begin}Found a Bag of Holding Upgrade!\r\n#{fam_window_end}")
+      5.times{
+        respond "* Congrats!!  You found a Bag of Holding Upgrade item!"
+      }
+      stash_valueables
+      cesspoolcheck
+    elsif result =~ /You search around and find (.*)\!/
+      wait_while {checkstunned}
+      stash_valueables
+      cesspoolcheck
+    elsif result =~ /You\'ve recently searched this area|You've recently searched this area|As you begin to search the area\, a wave of sewage|You search around the area and find a small rat, but it scurries off before you can catch it\!/
+      valid_movement = 0
+      dirs = ["north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest"]
+      until (valid_movement == 1)
+        sleep 0.5
+        move_result = dothistimeout("#{dirs.sample}", 5, /You can\'t go there|You can't go there|You will have to stand|Bloodriven Village, Sewer/)
+        if move_result =~ /You can\'t go there|You can't go there/
+          sleep 0.2
+        elsif move_result =~ /You will have to stand/
+          stand
+          sleep 0.2
+          waitrt?
+        elsif move_result =~ /Bloodriven Village, Sewer/
+          valid_movement = 1
+          sleep 0.5
+        end
+      end
+    elsif result =~ /You don't find anything of interest here./
+      5.times{
+        respond 'WARNING - This should not be happening'
+      }
+      break
+    end
+  }
+end
+
+loop {
+    beforesewers.call
+    searchsewers.call
+}

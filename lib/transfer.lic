@@ -1,0 +1,59 @@
+transfer_list = Array.new
+transfer_list = []
+character = script.vars[1]
+exclude_list = ["Drasik"]
+done = false
+blood_only = nil
+
+if exclude_list.include?(character)
+  exit
+end
+
+get_injuries = proc {
+  fput "appraise #{character}"
+  appraisal = matchtimeout 3, /You take a quick appraisal of/
+  if appraisal =~ /head/ then transfer_list.push("head") end
+  if appraisal =~ /right eye/ then transfer_list.push("right eye") end
+  if appraisal =~ /left eye/ then transfer_list.push("left eye") end
+  if appraisal =~ /neck/ then transfer_list.push("neck") end
+  if appraisal =~ /chest/ then transfer_list.push("chest") end
+  if appraisal =~ /back/ then transfer_list.push("back") end
+  if appraisal =~ /abdomen|abdominal/ then transfer_list.push("abdomen") end
+  if appraisal =~ /twitching|convulsions/ then transfer_list.push("nerves") end
+  if appraisal =~ /right arm/ then transfer_list.push("right arm") end
+  if appraisal =~ /right hand/ then transfer_list.push("right hand") end
+  if appraisal =~ /right leg/ then transfer_list.push("right leg") end
+  if appraisal =~ /left arm/ then transfer_list.push("left arm") end
+  if appraisal =~ /left hand/ then transfer_list.push("left hand") end
+  if appraisal =~ /left leg/ then transfer_list.push("left leg") end
+  if transfer_list.empty?
+    blood_only = true
+    transfer_list.push("blood")
+  else
+    blood_only = false
+    transfer_list.push("blood")
+  end
+}
+
+transfer_injuries = proc {
+  transfer_list.each { |w|
+    tricky = dothistimeout "transfer #{character} #{w}", 3, /meets with your standards of conduct|gradually fades|Transfer from whom?|You must heal your own,|You strain to do the transfer, but it doesn't work|is too weak to act on.|You draw the minor wound afflicting|does not appear to be suffering from a lack of blood./
+    if tricky =~ /meets with your standards of conduct|Your connection to your spirit with/
+      put "transfer #{patient} #{wound}"
+    elsif tricky =~ /You must heal your own/
+      Script.run('heal_down')
+      break
+    end
+    sleep 0.5 if !blood_only
+  } 
+  done = true
+}
+ 
+until done || !checkpcs.include?(character)
+  get_injuries.call
+  transfer_injuries.call
+  if !blood_only
+    fput "say ::#{character} beep, boop, you are healed!" if checkpcs.include?(character)
+  end
+end
+

@@ -1,0 +1,5 @@
+
+while line = get
+  break if /Notaneya just arrived./ =~ line
+end
+fput "join Notaneya"

@@ -1,0 +1,62 @@
+=begin
+	Lumnis Brooch helper
+	
+	This script will remind you to use your brooch when logging in by displaying how many uses it has left
+	It also tracks full moon, for assisting in using with 10% bonus
+	
+	Add to autostart by: ;autostart add brooch
+	
+	Then fill in the normal_xp variable below with the amount your brooch normally absorbs
+	
+	If you haven't seen a full moon yet, the next full moon calculation will error until you do
+	
+	Author:  Dantax
+	Version:  2
+
+=end
+
+# Fill in your brooch's normal XP absorb amount
+normal_xp = 762
+
+# Do not edit below this line
+
+silence_me
+
+sleep 2
+
+fput "analyze my brooch"
+
+usesLeft = false
+actual_xp = 0
+
+while line = get
+	if line =~ /You have used it (\d+) out of (\d+) times for today and it resets at midnight/
+		usesLeft = $1.to_i < $2.to_i
+		if usesLeft
+			puts "#{monsterbold_start} ****** YOU STILL NEED TO USE YOUR BROOCH: #{$2.to_i - $1.to_i} times ****** #{monsterbold_end}"
+			respond ''
+			respond "Last Full moon seen: #{UserVars.fullmoon_date}"
+			next_moon = UserVars.fullmoon_date + 7.4*60*60*24
+			respond "Next Full moon approx: #{next_moon}"
+			days_until = ((next_moon - Time.now) / (60*60*24)).round(2)
+			respond "Which is #{days_until} days from now"
+		end
+	elsif line =~ /You can tell that the brooch is as light as it can get/
+		if actual_xp > normal_xp
+			respond ''
+			respond ''
+			puts "#{monsterbold_start} ****** FULL MOON ACTIVE ****** #{monsterbold_end}"
+			respond ''
+			respond ''
+			time = Time.new
+			if time - UserVars.fullmoon_date > 60*60*24*5
+				UserVars.fullmoon_date = time
+				UserVars.save()
+			end
+		end
+		exit
+	elsif line =~ /resulting in the ability to instantly absorb (\d+) experience/
+		actual_xp = $1.to_i
+	end
+end
+
