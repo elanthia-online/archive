@@ -8,9 +8,11 @@
      author: SpiffyJr
      name: SpiffyLoot
        tags: loot
-    version: 3.5
+    version: 3.6
 
     changelog:
+        3.6 (2020-08-15)
+            Added collectible pickup due to new boss mob treasure update
         3.5 (2020-03-19)
             Removing Gtk::Tooltips to prep for Gtk3
         3.4 (2019-01-15)
@@ -108,6 +110,7 @@ setup = proc {
     gtk_globals["skinsack"] = Gtk::Entry.new.set_text(UserVars.skinsack)
     gtk_globals["uncommonsack"] = Gtk::Entry.new.set_text(UserVars.uncommonsack)
     gtk_globals["valuablesack"] = Gtk::Entry.new.set_text(UserVars.valuablesack)
+	gtk_globals["collectiblesack"] = Gtk::Entry.new.set_text(UserVars.collectiblesack)
     gtk_globals["clothingsack"] = Gtk::Entry.new.set_text(UserVars.clothingsack)
     gtk_globals["wandsack"] = Gtk::Entry.new.set_text(UserVars.wandsack)
     gtk_globals["skinweapon"] = Gtk::Entry.new.set_text(UserVars.skinweapon)
@@ -133,6 +136,7 @@ setup = proc {
     gtk_locals["enable_loot_skin"] = Gtk::CheckButton.new("Skins").set_active(settings["enable_loot_skin"])
     gtk_locals["enable_loot_uncommon"] = Gtk::CheckButton.new("Uncommon").set_active(settings["enable_loot_uncommon"])
     gtk_locals["enable_loot_valuable"] = Gtk::CheckButton.new("Valuables").set_active(settings["enable_loot_valuable"])
+	gtk_locals["enable_loot_collectible"] = Gtk::CheckButton.new("Collectibles").set_active(settings["enable_loot_collectible"])
     gtk_locals["enable_loot_clothing"] = Gtk::CheckButton.new("Clothings").set_active(settings["enable_loot_clothing"])
     gtk_locals["enable_loot_wand"] = Gtk::CheckButton.new("Wands").set_active(settings["enable_loot_wand"])
     gtk_locals["enable_disking"] = Gtk::CheckButton.new("(?) Disking").set_active(settings["enable_disking"])
@@ -156,6 +160,7 @@ setup = proc {
     gtk_locals["skin_stand_verb"] = Gtk::Entry.new.set_text(settings["skin_stand_verb"])
     gtk_locals["enable_sell_type_gem"] = Gtk::CheckButton.new("Gems").set_active(settings["enable_sell_type_gem"])
     gtk_locals["enable_sell_type_valuable"] = Gtk::CheckButton.new("Valuables").set_active(settings["enable_sell_type_valuable"])
+	gtk_locals["enable_sell_type_collectible"] = Gtk::CheckButton.new("Collectibles").set_active(settings["enable_sell_type_collectible"])
     gtk_locals["enable_sell_type_clothing"] = Gtk::CheckButton.new("Clothings").set_active(settings["enable_sell_type_clothing"])
     gtk_locals["enable_sell_type_jewelry"] = Gtk::CheckButton.new("Jewelry").set_active(settings["enable_sell_type_jewelry"])
     gtk_locals["enable_sell_type_lockpick"] = Gtk::CheckButton.new("Lockpicks").set_active(settings["enable_sell_type_lockpick"])
@@ -187,7 +192,7 @@ setup = proc {
     window.title = "SLoot configuration for #{Char.name}"
     window.border_width = 3
     window.resizable = false
-    window.resize(450, 300)
+    window.resize(450, 500)
 
     # Notebooks for tabs at the top
     nb = Gtk::Notebook.new.set_show_border(true).set_tab_border(3)
@@ -258,6 +263,11 @@ setup = proc {
     hb.pack_start(gtk_globals["clothingsack"], false)
     hb.pack_start(Gtk::Alignment.new(1, 0, 0, 1).add(Gtk::Label.new("Valuables:")).set_width_request(100))
     hb.pack_start(gtk_globals["valuablesack"], false)
+	vb_pg1_1.pack_start(hb, false)
+
+    hb = Gtk::HBox.new(false, 1)
+    hb.pack_start(Gtk::Alignment.new(1, 0, 0, 1).add(Gtk::Label.new("Collectibles:")).set_width_request(100))
+    hb.pack_start(gtk_globals["collectiblesack"], false)
 
     vb_pg1_1.pack_start(hb, false)
 
@@ -359,6 +369,7 @@ setup = proc {
 
     hb = Gtk::HBox.new(false, 1)
     hb.pack_start(Gtk::Alignment.new(0, 0, 0, 1).add(gtk_locals["enable_loot_clothing"].set_width_request(129)), false)
+	hb.pack_start(Gtk::Alignment.new(0, 0, 0, 1).add(gtk_locals["enable_loot_collectible"].set_width_request(129)), false)
 
     vb_pg2_1.pack_start(hb, false)
 
@@ -1892,7 +1903,7 @@ get_stored = proc {
   end
 }
 
-["clothing", "ammo", "box", "gem", "herb", "jewelry", "lockpick", "magic", "reagent", "scroll", "skin", "uncommon", "wand", "skinweapon", "valuable"].each { |type|
+["clothing", "ammo", "box", "gem", "herb", "jewelry", "lockpick", "magic", "reagent", "scroll", "skin", "uncommon", "wand", "skinweapon", "valuable", "collectible"].each { |type|
   if !UserVars.send("#{type}sack").nil? and UserVars.send("#{type}sack").length > 0 and sack = GameObj.inv.find { |obj| obj.name =~ /\b#{Regexp.escape(UserVars.send("#{type}sack").strip)}/i }
     sacks[type] = sack
   elsif script.vars[1] !~ /^setup/i
