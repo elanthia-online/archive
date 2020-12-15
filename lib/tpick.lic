@@ -7,6 +7,12 @@
 	Script will attempt to use vials bundled into your locksmith's pouch first for plated boxes, if no vials are bundled into your locksmith's pouch it will attempt to use wedges found in your wedge sack.
 
 	Usage:
+	;tpick can now drop off boxes at the pool and pick them up!
+	
+	To drop off boxes at the pool to be picked do for example ";tpick drop 100" to tip 100 silvers per box, do ";tpick drop 10 percent" or ";tpick drop 10%" if you want to tip 10% per box
+	
+	To pick up boxes that have been picked do ";tpick pickup" or ";tpick return"
+	
 	;tpick <setup> must be done first before you can use this script. Be sure to fill out all of the settings.
 
 	Use the following command line variables for how you want the script to run:
@@ -43,9 +49,19 @@
 	Non Rogues and bards do not need to use the "v" command line, they will always pick boxes with a vaalin lockpick and won't use calipers.
 	
 	Author: Tgo01
-	Version: 213
+	Version: 277
 
 =end
+
+lich_up_to_date = nil
+version = LICH_VERSION.split(".")
+if version[0].to_i > 4
+	lich_up_to_date = true
+elsif version[1].to_i > 6
+	lich_up_to_date = true
+elsif version[2].to_i > 53
+	lich_up_to_date = true
+end
 
 CharSettings['scarab'] = 0 unless CharSettings['scarab']
 CharSettings['needle'] = 0 unless CharSettings['needle']
@@ -65,12 +81,31 @@ CharSettings['rods'] = 0 unless CharSettings['rods']
 CharSettings['boomer'] = 0 unless CharSettings['boomer']
 CharSettings['no_trap'] = 0 unless CharSettings['no_trap']
 CharSettings['total_trap_count'] = 0.0 unless CharSettings['total_trap_count']
+temp_copper_lockpicks_array = UserVars.tpick["copper"].split(",")
+temp_steel_lockpicks_array = UserVars.tpick["steel"].split(",")
+temp_gold_lockpicks_array = UserVars.tpick["gold"].split(",")
+temp_silver_lockpicks_array = UserVars.tpick["silver"].split(",")
+temp_mithril_lockpicks_array = UserVars.tpick["mithril"].split(",")
+temp_ora_lockpicks_array = UserVars.tpick["ora"].split(",")
+temp_glaes_lockpicks_array = UserVars.tpick["glaes"].split(",")
+temp_laje_lockpicks_array = UserVars.tpick["laje"].split(",")
+temp_vultite_lockpicks_array = UserVars.tpick["vultite"].split(",")
+temp_rolaren_lockpicks_array = UserVars.tpick["rolaren"].split(",")
+temp_veniom_lockpicks_array = UserVars.tpick["veniom"].split(",")
+temp_invar_lockpicks_array = UserVars.tpick["invar"].split(",")
+temp_alum_lockpicks_array = UserVars.tpick["alum"].split(",")
+temp_golvern_lockpicks_array = UserVars.tpick["golvern"].split(",")
+temp_kelyn_lockpicks_array = UserVars.tpick["kelyn"].split(",")
+temp_vaalin_lockpicks_array = UserVars.tpick["vaalin"].split(",")
+same_scarab_found = nil
 box_was_not_locked = nil
 bash_the_box_open = nil
 bash_open_boxes = nil
 temp_math_number = nil
 check_for_lockpicks_etc = nil
 quick_maths = nil
+tip_is_a_percent = nil
+tip_being_offered = nil
 offered_tip_amount = nil
 minimum_tip_wanted = 0
 detect_plinite = nil
@@ -78,7 +113,21 @@ temp_id = nil
 temp_name = nil
 stow_calipers = nil
 stow_wedge = nil
+critter_level = nil
+total_number_of_boxes = 0
 lock = 0
+$tpick_use_403_cancel = nil
+$tpick_use_404_cancel = nil
+temp_403_variable = nil
+temp_404_variable = nil
+current_room = nil
+scarab_name = nil
+scarab_object = nil
+encumbrance_check = nil
+starting_room_number = nil
+number_of_times_to_measure = 0
+measure_detection = nil
+max_critter_level = 10000
 open_or_close_containers = Array.new
 buy_locksmith_pouch = nil
 cast_704_at_box = nil
@@ -88,12 +137,15 @@ CharSettings['total_boxes_picked'] = 0 unless CharSettings['total_boxes_picked']
 CharSettings['total_time_spent_picking_boxes'] = 0 unless CharSettings['total_time_spent_picking_boxes']
 average_picking_time = 0
 start_time = 0
+use_404_for_trap_difficulty = nil
 before_recommended_pick = nil
 i_need_403 = nil
 stow_both = nil
 ask_worker = nil
+random_trick = nil
 start_values_nilled = nil
 total_picking_time = nil
+count_boxes_in_disk = nil
 total_boxes_count = nil
 update_math_information = nil
 box_counts_for_math = true
@@ -179,10 +231,12 @@ disarm_trap = nil
 cast_402 = nil
 cast_403 = nil
 cast_404 = nil
+use_403_for_lock_difficulty = nil
 can_use_calipers = nil
 pop_boxes_begin = nil
 fused_lock_disarm = nil
 starting_room = Room.current.id
+override_bracers = nil
 $scale_trap_weapon_id = nil
 
 $tpick_list_of_box_ids = Array.new
@@ -256,6 +310,22 @@ $alum_lockpick_id = nil
 $golvern_lockpick_id = nil
 $kelyn_lockpick_id = nil
 $vaalin_lockpick_id = nil
+copper_lock_pick_array = Array.new
+steel_lock_pick_array = Array.new
+gold_lock_pick_array = Array.new
+silver_lock_pick_array = Array.new
+mithril_lock_pick_array = Array.new
+ora_lock_pick_array = Array.new
+glaes_lock_pick_array = Array.new
+laje_lock_pick_array = Array.new
+vultite_lock_pick_array = Array.new
+rolaren_lock_pick_array = Array.new
+veniom_lock_pick_array = Array.new
+invar_lock_pick_array = Array.new
+alum_lock_pick_array = Array.new
+golvern_lock_pick_array = Array.new
+kelyn_lock_pick_array = Array.new
+vaalin_lock_pick_array = Array.new
 CharSettings['setup_has_been_run'] = nil unless CharSettings['setup_has_been_run']
 CharSettings['setup_has_been_run_again'] = nil unless CharSettings['setup_has_been_run_again']
 start_with_copper = nil
@@ -268,6 +338,7 @@ all_variables_to_check = [ script.vars[1], script.vars[2], script.vars[3], scrip
 open_current_plinite = nil
 plinite_already_open = nil
 cannot_determine_plinite_difficulty = nil
+critter_name = nil
 
 stats_check = proc{
 	if CharSettings['total_trap_count'] == 0.0
@@ -318,6 +389,8 @@ armor_number = Array.new
 weapon_number = Array.new
 clothing_number = Array.new
 other_number = Array.new
+
+dex_bonus = nil
 
 #The following is just for informational purposes, no need to change anything.
 
@@ -379,12 +452,21 @@ other_number = Array.new
 #Absurdly Complex			1475
 #Impossibly Complex			1515
 
+
 worker = nil
-worker = Room.current.tags.find{ |i| i =~ /meta:boxpool:npc:.*/ }
+if Room.current.id == 28937
+	worker = "worker"
+else
+	Room.current.tags.find{ |i| i =~ /meta:boxpool:npc:(.*)/;worker = $1}
+end
 worker = GameObj.npcs.find {|i| worker =~ /#{i}/}
 
 table = nil
-table = Room.current.tags.find{ |i| i =~ /meta:boxpool:table:.*/ }
+if Room.current.id == 28937
+	table = "table"
+else
+	Room.current.tags.find{ |i| i =~ /meta:boxpool:table:(.*)/;table = $1}
+end
 if GameObj.loot.find {|i| table =~ /#{i}/}
 	table = GameObj.loot.find {|i| table =~ /#{i}/}
 else
@@ -393,11 +475,16 @@ end
 
 pick_mod = [ 1.00, 1.10, 1.20, 1.30, 1.45, 1.55, 1.60, 1.75, 1.80, 1.90, 2.20, 2.25, 2.30, 2.35, 2.40, 2.50 ]
 lock_difficulty = [ 35, 75, 115, 155, 195, 235, 275, 315, 355, 395, 435, 475, 515, 555, 595, 635, 675, 715, 755, 795, 835, 875, 915, 955, 995, 1035, 1075, 1115, 1155, 1195, 1235, 1275, 1315, 1355, 1395, 1435, 1475, 1515 ]
-pick_skill = (Skills.to_bonus(Skills.pickinglocks) + Stats.enhanced_dex[1])
-pick_lore = [(Stats.level / 2) + (Skills.to_bonus(Skills.pickinglocks) / 10) + (Stats.enhanced_dex[1]) + (Spells.minorelemental / 4), Skills.pickinglocks].min
-disarm_skill = (Stats.enhanced_dex[1] + Skills.to_bonus(Skills.disarmingtraps))
+if lich_up_to_date
+	dex_bonus = Stats.enhanced_dex[1]
+else
+	dex_bonus = Stats.dex[1]
+end
+pick_skill = (Skills.to_bonus(Skills.pickinglocks) + dex_bonus)
+pick_lore = [(Stats.level / 2) + (Skills.to_bonus(Skills.pickinglocks) / 10) + (dex_bonus) + (Spells.minorelemental / 4), Skills.pickinglocks].min
+disarm_skill = (dex_bonus + Skills.to_bonus(Skills.disarmingtraps))
 if Spell[404].known?
-	disarm_lore = (Stats.level / 2) + (Skills.to_bonus(Skills.disarmingtraps) / 10) + (Stats.agi[1] / 2) + (Stats.dis[1] / 2)
+	disarm_lore = [(Stats.level / 2) + (Skills.to_bonus(Skills.disarmingtraps) / 10) + dex_bonus + (Spells.minorelemental / 4), Skills.to_bonus(Skills.disarmingtraps)].min
 else
 	disarm_lore = 0
 end
@@ -549,6 +636,7 @@ setup = proc{
 		add_label_entry($OP_TABLE3, "Locksmith's Container", 'locksmiths_container')
 		add_label_entry($OP_TABLE3, "Gem Container", 'gem_container')
 		#add_label_entry($OP_TABLE4, "Run silently", 'run_silently')
+		add_label_entry($OP_TABLE4, "Auto deposit silvers", 'auto_deposit_silvers')
 		add_label_entry($OP_TABLE4, "Gnomish Bracer", 'gnomish_bracer')
 		add_label_entry($OP_TABLE4, "Bashing Weapon", 'bashing_weapon')
 		add_label_entry($OP_TABLE4, "Scale Trap Weapon", 'scale_trap_weapon')
@@ -576,6 +664,8 @@ setup = proc{
 		add_label_entry($OP_TABLE7, "Pick at Percent", 'pick_percent')
 		add_label_entry($OP_TABLE8, "Ready", 'ready')
 		add_label_entry($OP_TABLE8, "Can't Open Box", 'cant_open_box')
+		add_label_entry($OP_TABLE8, "Scarab Found", 'scarab_found')
+		add_label_entry($OP_TABLE8, "Scarab safe", 'scarab_safe')
 		add_label_entry($OP_TABLE9, "Phase (704)", 'always_use_704')
 		add_label_entry($OP_TABLE9, "Number of 416 casts", 'number_of_416_casts')
 		add_label_entry($OP_TABLE9, "Only disarm safe", 'only_disarm_safe')
@@ -602,14 +692,14 @@ setup = proc{
 		$OP_TOOLTIPS.enable
 
 		label = Gtk::Label.new
-		label.set_markup("Enter the FULL name of your lockpicks above, NOT including the words 'a' or 'an'.  If you don't have a particular lockpick use the next best lockpick.\nFor example if you don't have a steel lockpick then put the name of your gold lockpick in both the steel and gold lockpick variables.")
+		label.set_markup("Enter the FULL name of your lockpicks above, NOT including the words 'a' or 'an'.  If you don't have a particular lockpick use the next best lockpick.\nFor example if you don't have a steel lockpick then put the name of your gold lockpick in both the steel and gold lockpick variables.\nYou can enter multiple lockpicks of the same kind by separating them with a comma.\nFor example if you have two copper lockpicks you can enter the following in the Copper Lockpick setting: dark red copper lockpick,red tinted copper lockpick.\nNote no space after the comma.")
 		align = Gtk::Alignment.new(1, 0, 0, 0)
 		align.set_padding(50, 0, 0, 40)
 		align.add(label)
 		$OP_TABLE1.attach(align, 1, 2, 8, 9)
 
 		label = Gtk::Label.new
-		label.set_markup("Enter the FULL name of your lockpicks above, NOT including the words 'a' or 'an'.  If you don't have a particular lockpick use the next best lockpick.\nFor example if you don't have a steel lockpick then put the name of your gold lockpick in both the steel and gold lockpick variables.")
+		label.set_markup("Enter the FULL name of your lockpicks above, NOT including the words 'a' or 'an'.  If you don't have a particular lockpick use the next best lockpick.\nFor example if you don't have a steel lockpick then put the name of your gold lockpick in both the steel and gold lockpick variables.\nYou can enter multiple lockpicks of the same kind by separating them with a comma.\nFor example if you have two copper lockpicks you can enter the following in the Copper Lockpick setting: dark red copper lockpick,red tinted copper lockpick.\nNote no space after the comma.")
 		align = Gtk::Alignment.new(1, 0, 0, 0)
 		align.set_padding(50, 0, 0, 40)
 		align.add(label)
@@ -623,21 +713,21 @@ setup = proc{
 		$OP_TABLE3.attach(align, 1, 2, 8, 9)
 
 		label = Gtk::Label.new
-		label.set_markup("<b>Gnomish Bracer:</b>  Enter name and tier of your gnomish bracer (example: bracer,1), <b>nil</b> if none.\n<b>Bashing Weapon:</b>  Name of weapon to use for bashing boxes, <b>nil</b> if none.\n<b>Scale Trap Weapon:</b>  FULL name of weapon you use for disarming scale traps, not including 'a' or 'an'.\n<b>Trap Roll:</b>  Determines what difficulty boxes you want to attempt.\nSet to 0 to never try anything higher than your total disarm skill + lore bonus.\nSetting to 10 would attempt traps 10 points higher than your disarm skill + lore bonus.\nSetting to -10 would only attempt traps that are a maximum of 10 points lower than your disarm skill + lore bonus.\nSet this value to whatever number you want. A value of 1000 would attempt to disarm all traps.\nScript will always use 404 if it determines you need the spell to disarm a trap.\n<b>Lock Roll:</b>  Maximum roll allowed before moving to a higher lockpick.\nExample if this value is 50 and you roll a 60 and didn't pick the lock the script will move to the next lockpick. 50 is a good starting number.\n<b>Vaalin Lock Roll:</b>  Same as above but just for vaalin picks if you want to attempt to pick locks with a higher needed roll than other lockpicks. 80 is a good starting number.\nSet to 1000 to always try picking a lock with a vaalin lockpick before moving on to a wedge or 407.\n<b>This number should be equal or higher than Lock Roll.</b>")
+		label.set_markup("<b>Auto deposit silvers:</b> Enter <b>yes</b> to auto deposit silvers when encumbered and picking pool boxes or ground picking and looting.\n<b>Gnomish Bracer:</b>  Enter name and tier of your gnomish bracer (example: bracer,1), <b>nil</b> if none.\n<b>Gnomish Bracer:</b> Entering <b>,override</b> (for example: bracer,1,override) at the end will only use bracers for disarming and will use <b>lockpick container</b> setting to find and store lockpicks.\n<b>Bashing Weapon:</b>  Name of weapon to use for bashing boxes, <b>nil</b> if none.\n<b>Scale Trap Weapon:</b>  FULL name of weapon you use for disarming scale traps, not including 'a' or 'an'.\n<b>Trap Roll:</b>  Determines what difficulty boxes you want to attempt.\nSet to 0 to never try anything higher than your total disarm skill + lore bonus.\nSetting to 10 would attempt traps 10 points higher than your disarm skill + lore bonus.\nSetting to -10 would only attempt traps that are a maximum of 10 points lower than your disarm skill + lore bonus.\nSet this value to whatever number you want. A value of 1000 would attempt to disarm all traps.\nScript will always use 404 if it determines you need the spell to disarm a trap.\n<b>Lock Roll:</b>  Maximum roll allowed before moving to a higher lockpick.\nExample if this value is 50 and you roll a 60 and didn't pick the lock the script will move to the next lockpick. 50 is a good starting number.\n<b>Vaalin Lock Roll:</b>  Same as above but just for vaalin picks if you want to attempt to pick locks with a higher needed roll than other lockpicks. 80 is a good starting number.\nSet to 1000 to always try picking a lock with a vaalin lockpick before moving on to a wedge or 407.\n<b>This number should be equal or higher than Lock Roll.</b>")
 		align = Gtk::Alignment.new(1, 0, 0, 0)
 		align.set_padding(50, 0, 0, 40)
 		align.add(label)
 		$OP_TABLE4.attach(align, 1, 2, 8, 9)
 
 		label = Gtk::Label.new
-		label.set_markup("<b>Trick:</b>  Trick to use when picking locks. Enter: spin, twist, turn, twirl, toss, bend or flip.  Enter <b>pick</b> if you don't want to use a trick.\n<b>Log:</b>  Enter <b>yes</b> to display a summary of all loot found when done.\n<b>Trash boxes:</b>  Enter <b>yes</b> to dispose of empty boxes if possible, <b>no</b> will drop them on the ground, <b>save</b> STOWS empty boxes.\n<b>Calibrate on startup:</b>  Enter <b>yes</b> to calibrate your calipers whenever the script is started and you are measuring locks, <b>no</b> to skip calibrating or you have less than 40 ranks of lock mastery.\n<b>Calibrate Count:</b>  Will calibrate your calipers every time you pick this many boxes. (enter 999 to never calibrate)\n<b>Auto Bundle Vials:</b> Enter <b>yes</b> to have script bundle vials you get from disarming traps into your locksmith's container.\n<b>Auto repair bent lockpicks:</b>  Enter <b>yes</b> to have script automatically repair lockpicks after they have been bent. Only works if you have learned lmas repair.\n<b>Number of times to check for traps:</b>  How many times you want script to manually check for traps.")
+		label.set_markup("<b>Trick:</b>  Trick to use when picking locks. Enter: spin, twist, turn, twirl, toss, bend or flip.  Enter <b>pick</b> if you don't want to use a trick.\nEnter <b>random</b> to use a random trick each time you pick a box, ONLY USE THIS IF YOU KNOW ALL THE TRICKS.\n<b>Log:</b>  Enter <b>yes</b> to display a summary of all loot found when done.\n<b>Trash boxes:</b>  Enter <b>yes</b> to dispose of empty boxes if possible, <b>no</b> will drop them on the ground, <b>save</b> STOWS empty boxes.\n<b>Calibrate on startup:</b>  Enter <b>yes</b> to calibrate your calipers whenever the script is started and you are measuring locks, <b>no</b> to skip calibrating or you have less than 40 ranks of lock mastery.\n<b>Calibrate Count:</b>  Will calibrate your calipers every time you pick this many boxes. (enter 999 to never calibrate)\n<b>Auto Bundle Vials:</b> Enter <b>yes</b> to have script bundle vials you get from disarming traps into your locksmith's container.\n<b>Auto repair bent lockpicks:</b>  Enter <b>yes</b> to have script automatically repair lockpicks after they have been bent. Only works if you have learned lmas repair.\n<b>Number of times to check for traps:</b>  How many times you want script to manually check for traps.")
 		align = Gtk::Alignment.new(1, 0, 0, 0)
 		align.set_padding(50, 0, 0, 40)
 		align.add(label)
 		$OP_TABLE5.attach(align, 1, 2, 8, 9)
 
 		label = Gtk::Label.new
-		label.set_markup("Enter <b>yes</b> for any spells you want to keep on while disarming/picking, <b>no</b> for any spells you don't want to cast.\nIf 403 and 404 are set to <b>no</b> the script will cast the spells when needed (after a failure or for a very high lock) and if you know the spell.\nSet 403 and 404 to <b>cancel</b> if you want these spells stopped when starting on a new box.\nSet 403 to <b>never</b> to NEVER use 403.\nIf <b>407</b> is set to <b>plate</b> the script will attempt to open plated boxes (except mithril or enruned) with 407 if you have no acid vials or wedges.\nIf <b>407</b> is set to <b>all</b> the script will attempt to open all boxes (except mithril and enruned) with 407.\nEnter <b>no</b> for <b>407</b> to skip using 407 on boxes.")
+		label.set_markup("Enter <b>yes</b> for any spells you want to keep on while disarming/picking, <b>no</b> for any spells you don't want to cast.\nIf 403 and 404 are set to <b>no</b> the script will cast the spells when needed (after a failure or for a very high lock) and if you know the spell.\nSet 403 and 404 to <b>cancel</b> if you want these spells stopped when starting on a new box.\nSet 403 to <b>never</b> to NEVER use 403.\nSet 403 or 404 to a number (like 100) to always use 403/404 if the lock/trap difficulty is above this number.\nYou can do something like <b>100,cancel</b> (note no spaces) if you still want to cancel 403/404 when starting a new box.\nIf <b>407</b> is set to <b>plate</b> the script will attempt to open plated boxes (except mithril or enruned) with 407 if you have no acid vials or wedges.\nIf <b>407</b> is set to <b>all</b> the script will attempt to open all boxes (except mithril and enruned) with 407.\nEnter <b>no</b> for <b>407</b> to skip using 407 on boxes.")
 		align = Gtk::Alignment.new(1, 0, 0, 0)
 		align.set_padding(50, 0, 0, 40)
 		align.add(label)
@@ -651,7 +741,7 @@ setup = proc{
 		$OP_TABLE7.attach(align, 1, 2, 8, 9)
 
 		label = Gtk::Label.new
-		label.set_markup("Enter <b>nil</b> for any option where you don't want to speak.\n<b>Ready:</b>  What to say when ready to be handed boxes from another person. Example: <b>Ready.</b>\n<b>Can't Open Box:</b>  What to say when you can't open a box for another person. Example: <b>Sorry can't open this box.</b>")
+		label.set_markup("Enter <b>nil</b> for any option where you don't want to speak.\n<b>Ready:</b>  What to say when ready to be handed boxes from another person. Example: <b>Ready.</b>\n<b>Can't Open Box:</b>  What to say when you can't open a box for another person. Example: <b>Sorry can't open this box.</b>\n<b>Scarab Found:</b>  What to say before you disarm a scarab trap. Example: <b>Scarab coming down.</b>\n<b>Scarab Safe:</b> What to say after you have disarmed the scarab. For example: <b>Scarab safe.</b>")
 		align = Gtk::Alignment.new(1, 0, 0, 0)
 		align.set_padding(50, 0, 0, 40)
 		align.add(label)
@@ -748,8 +838,8 @@ end
 
 def tpick_stop_403_404		
 	waitrt?
-	fput "stop 403" if Spell[403].active? && UserVars.tpick["always_use_403"] == "cancel"
-	fput "stop 404" if Spell[404].active? && UserVars.tpick["always_use_404"] == "cancel"
+	fput "stop 403" if Spell[403].active? && ($tpick_use_403_cancel =~ /cancel/i || UserVars.tpick["always_use_403"] =~ /cancel/i)
+	fput "stop 404" if Spell[404].active? && ($tpick_use_404_cancel =~ /cancel/i || UserVars.tpick["always_use_404"] =~ /cancel/i)
 end
 
 def tpick_stow_box(current_box)
@@ -761,13 +851,21 @@ def tpick_stow_box(current_box)
 end
 
 def tpick_say_cant
-	fput "say #{UserVars.tpick["cant_open_box"]}" if UserVars.tpick["cant_open_box"] != "nil"
+	fput "say #{UserVars.tpick["cant_open_box"]}" if UserVars.tpick["cant_open_box"] != "nil" && UserVars.tpick["cant_open_box"].length > 0
+end
+
+def tpick_say_scarab_found
+	fput "say #{UserVars.tpick["scarab_found"]}" if UserVars.tpick["scarab_found"] != "nil" && UserVars.tpick["scarab_found"].length > 0
+end
+
+def tpick_say_scarab_safe
+	fput "say #{UserVars.tpick["scarab_safe"]}" if UserVars.tpick["scarab_safe"] != "nil" && UserVars.tpick["scarab_safe"].length > 0
 end
 
 ask_worker = proc{
 	waitrt?
-	result = dothistimeout "ask ##{worker.id} to check", 3, /If you want to give up\, ASK me to CHECK it again within 30 seconds\.\"|Here\'s your payment of|You aren\'t working on a job\./
-	if result =~ /If you want to give up\, ASK me to CHECK it again within 30 seconds\.\"|Here\'s your payment of|You aren\'t working on a job\./
+	result = dothistimeout "ask ##{worker.id} to check", 3, /If you want to give up\, ASK me to CHECK it again within 30 seconds\.\"|Here\'s your payment of|You aren\'t working on a job\.|Too tough for ya\, eh\?/
+	if result =~ /If you want to give up\, ASK me to CHECK it again within 30 seconds\.\"|Here\'s your payment of|You aren\'t working on a job\.|Too tough for ya\, eh\?/
 		nil
 	elsif result.nil?
 		echo "Didn't recognize game line I was looking for, trying again."
@@ -792,7 +890,7 @@ stow_wedge = proc{
 }
 
 open_current_plinite = proc{
-	stow_left.call
+	stow_left.call unless GameObj.left_hand.id == current_box.id
 	waitrt?
 	fput "pluck ##{current_box.id}"
 	stow_both.call
@@ -816,6 +914,7 @@ start_plinites = proc{
 
 detect_plinite_result = proc{
 	waitrt?
+	(tpick_cast_spells (404)) if (use_spell_404) || (need_404)
 	result = dothistimeout "detect ##{current_box.id}", 3, /It looks like it would be.*\(\-(\d+)\)\.|You struggle to determine the difficulty of the extraction \(somewhere between .* and \-(\d+)\)\.|You promptly discover that the core has already been removed\.|You are unable to determine the difficulty of the extraction\.|You promptly discover that the core has already been extracted and merely needs to be PLUCKed from the tip of the shard\./
 	if result =~ /It looks like it would be.*\(\-(\d+)\)\./ || result =~ /You struggle to determine the difficulty of the extraction \(somewhere between .* and \-(\d+)\)\./
 		lock = $1.to_i
@@ -836,24 +935,34 @@ detect_plinite_result = proc{
 
 detect_plinite = proc{
 	i_need_403 = nil
+	need_404 = "yes" unless UserVars.tpick["always_use_404"] == "never"
+	waitrt?
+	3.times{
+		waitrt?
+		unless GameObj.right_hand.id == $vaalin_lockpick_id || GameObj.left_hand.id == $vaalin_lockpick_id
+			fput "get ##{$vaalin_lockpick_id}"
+			sleep 0.2
+		end
+	}
+	if GameObj.right_hand.id != $vaalin_lockpick_id && GameObj.left_hand.id != $vaalin_lockpick_id
+		echo "Couldn't find your #{UserVars.tpick["vaalin"]}."
+		exit
+	end
 	detect_plinite_result.call
+	until GameObj.right_hand.id != $vaalin_lockpick_id && GameObj.left_hand.id != $vaalin_lockpick_id
+		waitrt?
+		fput "put ##{$vaalin_lockpick_id} in ##{lockpick_container.id}"
+		sleep 0.2
+	end
 	if plinite_already_open == nil
 		total_pick_skill = (pick_skill + pick_lore) * 2.50
-		if lock > (total_pick_skill + UserVars.tpick["vaalin_lock_roll"].to_i) || cannot_determine_plinite_difficulty
+		if lock > (total_pick_skill + UserVars.tpick["vaalin_lock_roll"].to_i)
 			if solo_or_other == "worker"
-				if cannot_determine_plinite_difficulty
-					echo "Can't extract this plinite because difficulty could not be determined."
-				else
-					echo "Can't extract this plinite based on my calculations. If you think this is in error increase the Vaalin Lock Roll setting in the setup menu."
-				end
+				echo "Can't extract this plinite based on my calculations. If you think this is in error increase the Vaalin Lock Roll setting in the setup menu."
 				cannot_determine_plinite_difficulty = nil
 				ask_worker.call
 			else
-				if cannot_determine_plinite_difficulty
-					echo "Can't extract this plinite because difficulty could not be determined, OPENing it instead."
-				else
-					echo "Can't extract this plinite, OPENing it instead. If you think this is in error increase the Vaalin Lock Roll setting in the setup menu."
-				end
+				echo "Can't extract this plinite, OPENing it instead. If you think this is in error increase the Vaalin Lock Roll setting in the setup menu."
 				cannot_determine_plinite_difficulty = nil
 				waitrt?
 				fput "open ##{current_box.id}"
@@ -861,9 +970,9 @@ detect_plinite = proc{
 		else
 			pick_mod.each do |i|
 				total_pick_skill = (pick_skill + pick_lore)
-				if (total_pick_skill) * 2.50 - lock + UserVars.tpick["lock_roll"].to_i < 100
+				if (total_pick_skill) * 2.50 - lock + UserVars.tpick["lock_roll"].to_i < 100 || cannot_determine_plinite_difficulty
 					needed_pick = UserVars.tpick["vaalin"]
-					needed_pick_id = $vaalin_lockpick_id
+					needed_pick_id = vaalin_lock_pick_array.first
 					need_403 = "yes" unless UserVars.tpick["always_use_403"] == "never"
 					need_404 = "yes" unless UserVars.tpick["always_use_404"] == "never"
 					i_need_403 = true unless UserVars.tpick["always_use_403"] == "never"
@@ -880,6 +989,9 @@ detect_plinite = proc{
 						break
 					end
 				end
+				if use_403_for_lock_difficulty && Spell[403].known? && lock > use_403_for_lock_difficulty
+					i_need_403 = true
+				end
 			end
 			if i_need_403
 				number = 0
@@ -894,90 +1006,95 @@ detect_plinite = proc{
 					end
 				end
 			end
+			number = [15, number].min
 			if number == 0
 				needed_pick = UserVars.tpick["copper"]
-				needed_pick_id = $copper_lockpick_id
+				needed_pick_id = copper_lock_pick_array.first
 				recommended_pick = "copper"
 				recommended_pick_modifier = 1.00
 			elsif number == 1
 				needed_pick = UserVars.tpick["steel"]
-				needed_pick_id = $steel_lockpick_id
+				needed_pick_id = steel_lock_pick_array.first
 				recommended_pick = "steel"
 				recommended_pick_modifier = 1.10
 			elsif number == 2
 				needed_pick = UserVars.tpick["gold"]
-				needed_pick_id = $gold_lockpick_id
+				needed_pick_id = gold_lock_pick_array.first
 				recommended_pick = "gold"
 				recommended_pick_modifier = 1.20
 			elsif number == 3
 				needed_pick = UserVars.tpick["silver"]
-				needed_pick_id = $silver_lockpick_id
+				needed_pick_id = silver_lock_pick_array.first
 				recommended_pick = "silver"
 				recommended_pick_modifier = 1.30
 			elsif number == 4
 				needed_pick = UserVars.tpick["mithril"]
-				needed_pick_id = $mithril_lockpick_id
+				needed_pick_id = mithril_lock_pick_array.first
 				recommended_pick = "mithril"
 				recommended_pick_modifier = 1.45
 			elsif number == 5
 				needed_pick = UserVars.tpick["ora"]
-				needed_pick_id = $ora_lockpick_id
+				needed_pick_id = ora_lock_pick_array.first
 				recommended_pick = "ora"
 				recommended_pick_modifier = 1.55
 			elsif number == 6
 				needed_pick = UserVars.tpick["glaes"]
-				needed_pick_id = $glaes_lockpick_id
+				needed_pick_id = glaes_lock_pick_array.first
 				recommended_pick = "glaes"
 				recommended_pick_modifier = 1.60
 			elsif number == 7
 				needed_pick = UserVars.tpick["laje"]
-				needed_pick_id = $laje_lockpick_id
+				needed_pick_id = laje_lock_pick_array.first
 				recommended_pick = "laje"
 				recommended_pick_modifier = 1.75
 			elsif number == 8
 				needed_pick = UserVars.tpick["vultite"]
-				needed_pick_id = $vultite_lockpick_id
+				needed_pick_id = vultite_lock_pick_array.first
 				recommended_pick = "vultite"
 				recommended_pick_modifier = 1.80
 			elsif number == 9
 				needed_pick = UserVars.tpick["rolaren"]
-				needed_pick_id = $rolaren_lockpick_id
+				needed_pick_id = rolaren_lock_pick_array.first
 				recommended_pick = "rolaren"
 				recommended_pick_modifier = 1.90
 			elsif number == 10
 				needed_pick = UserVars.tpick["veniom"]
-				needed_pick_id = $veniom_lockpick_id
+				needed_pick_id = veniom_lock_pick_array.first
 				recommended_pick = "veniom"
 				recommended_pick_modifier = 2.20
 			elsif number == 11
 				needed_pick = UserVars.tpick["invar"]
-				needed_pick_id = $invar_lockpick_id
+				needed_pick_id = invar_lock_pick_array.first
 				recommended_pick = "invar"
 				recommended_pick_modifier = 2.25
 			elsif number == 12
 				needed_pick = UserVars.tpick["alum"]
-				needed_pick_id = $alum_lockpick_id
+				needed_pick_id = alum_lock_pick_array.first
 				recommended_pick = "alum"
 				recommended_pick_modifier = 2.30
 			elsif number == 13
 				needed_pick = UserVars.tpick["golvern"]
-				needed_pick_id = $golvern_lockpick_id
+				needed_pick_id = golvern_lock_pick_array.first
 				recommended_pick = "golvern"
 				recommended_pick_modifier = 2.35
 			elsif number == 14
 				needed_pick = UserVars.tpick["kelyn"]
-				needed_pick_id = $kelyn_lockpick_id
+				needed_pick_id = kelyn_lock_pick_array.first
 				recommended_pick = "kelyn"
 				recommended_pick_modifier = 2.40
-			elsif number == 15
+			elsif number > 14
 				needed_pick = UserVars.tpick["vaalin"]
-				needed_pick_id = $vaalin_lockpick_id
+				needed_pick_id = vaalin_lock_pick_array.first
 				recommended_pick = "vaalin"
 				recommended_pick_modifier = 2.50
 			end
 			echo "Recommended lock pick: #{recommended_pick} with a modifier of #{recommended_pick_modifier}"
 			if need_403 == "yes"
-				echo "Recommend 403: Yes"
+				if use_403_for_lock_difficulty && Spell[403].known? && lock > use_403_for_lock_difficulty
+					echo "Lock difficulty is higher than your 403 setting in setup menu, using 403."
+				else
+					echo "Recommend 403: Yes"
+				end
 				echo "Your calculated lockpicking skill: #{pick_skill}"
 				echo "Your calculated lockpicking lore: #{pick_lore}"
 				temp_math_number = pick_skill + pick_lore
@@ -986,10 +1103,15 @@ detect_plinite = proc{
 				echo "Your calculated lockpicking skill: #{pick_skill}"
 				temp_math_number = pick_skill
 			end
-			quick_maths = (temp_math_number * recommended_pick_modifier)
+			quick_maths = (temp_math_number * recommended_pick_modifier).truncate
 			echo "Your total picking skill for this attempt is: #{quick_maths}"
 			echo "Lock difficulty: #{lock}"
-			pick2.call
+			if needed_pick_id.nil?
+				echo "All of your #{recommended_pick} lockpicks seem to be broken, trying a higher tier lockpick."
+				nextpick.call
+			else
+				pick2.call
+			end
 		end	
 	end
 }
@@ -1096,15 +1218,31 @@ gnomish_bracers_trap_check = proc{
 	end
 	tpick_get_box(current_box) if solo_or_other == "ground"
 	if solo_or_other == "worker" && current_box.nil?
-		dothistimeout "look on ##{table.id}", 3, /^On the/
-		table.contents.each{ |item|
-			if item.name =~ /#{checkname}/
-				current_box = item
-				break
+		until current_box
+			dothistimeout "look on ##{table.id}", 3, /^On the/
+			table.contents.each{ |item|
+				if item.name =~ /#{checkname}/
+					current_box = item
+					break
+				end
+			}
+			if current_box.nil?
+				table.contents.each{ |item|
+					fput "tap ##{item.id}"
+					while line = get
+						if line =~ /^You probably shouldn\'t do that\./
+							break
+						elsif line =~ /^You tap/
+							current_box = item
+							break
+						end
+					end
+					break if current_box
+				}
 			end
-		}
-		wait_until { current_box }
-		sleep 1
+			sleep 1
+		end
+		echo "Found your box/plinite! Name: #{current_box}, ID: #{current_box.id}, tip: #{offered_tip_amount}, critter name: #{critter_name}, critter level: #{critter_level}"
 	end
 	gnomish_bracers_trap_check_result.call
 }
@@ -1116,7 +1254,8 @@ check_for_trap = proc{
 	tpick_prep_spell(416, "Piercing Gaze")
 	fput "cast at ##{current_box.id}"
 	while line = get
-		if line =~ /Peering closely into the lock\, you spy.*scarab wedged into the lock mechanism\./
+		if line =~ /Peering closely into the lock\, you spy an? [a-zA-Z]+ (.*) scarab wedged into the lock mechanism\./
+			scarab_name = $1
 			current_trap_type = "scarab"
 			CharSettings['scarab'] += 1
 			CharSettings['total_trap_count'] += 1
@@ -1528,22 +1667,22 @@ check_for_lockpicks_etc = proc {
 			if server_string =~ /\<a exist\=\"(\d+)" noun\=\".*\"\>(.*)\<\/a\>/
 				temp_id = $1
 				temp_name = $2
-				$copper_lockpick_id = temp_id if temp_name =~ /^#{UserVars.tpick["copper"]}$/
-				$steel_lockpick_id = temp_id if temp_name =~ /^#{UserVars.tpick["steel"]}$/
-				$gold_lockpick_id = temp_id if temp_name =~ /^#{UserVars.tpick["gold"]}$/
-				$silver_lockpick_id = temp_id if temp_name =~ /^#{UserVars.tpick["silver"]}$/
-				$mithril_lockpick_id = temp_id if temp_name =~ /^#{UserVars.tpick["mithril"]}$/
-				$ora_lockpick_id = temp_id if temp_name =~ /^#{UserVars.tpick["ora"]}$/
-				$glaes_lockpick_id = temp_id if temp_name =~ /^#{UserVars.tpick["glaes"]}$/
-				$laje_lockpick_id = temp_id if temp_name =~ /^#{UserVars.tpick["laje"]}$/
-				$vultite_lockpick_id = temp_id if temp_name =~ /^#{UserVars.tpick["vultite"]}$/
-				$rolaren_lockpick_id = temp_id if temp_name =~ /^#{UserVars.tpick["rolaren"]}$/
-				$veniom_lockpick_id = temp_id if temp_name =~ /^#{UserVars.tpick["veniom"]}$/
-				$invar_lockpick_id = temp_id if temp_name =~ /^#{UserVars.tpick["invar"]}$/
-				$alum_lockpick_id = temp_id if temp_name =~ /^#{UserVars.tpick["alum"]}$/
-				$golvern_lockpick_id = temp_id if temp_name =~ /^#{UserVars.tpick["golvern"]}$/
-				$kelyn_lockpick_id = temp_id if temp_name =~ /^#{UserVars.tpick["kelyn"]}$/
-				$vaalin_lockpick_id = temp_id if temp_name =~ /^#{UserVars.tpick["vaalin"]}$/
+				copper_lock_pick_array.push(temp_id) if temp_copper_lockpicks_array.include?(temp_name)
+				steel_lock_pick_array.push(temp_id) if temp_steel_lockpicks_array.include?(temp_name)
+				gold_lock_pick_array.push(temp_id) if temp_gold_lockpicks_array.include?(temp_name)
+				silver_lock_pick_array.push(temp_id) if temp_silver_lockpicks_array.include?(temp_name)
+				mithril_lock_pick_array.push(temp_id) if temp_mithril_lockpicks_array.include?(temp_name)
+				ora_lock_pick_array.push(temp_id) if temp_ora_lockpicks_array.include?(temp_name)
+				glaes_lock_pick_array.push(temp_id) if temp_glaes_lockpicks_array.include?(temp_name)
+				laje_lock_pick_array.push(temp_id) if temp_laje_lockpicks_array.include?(temp_name)
+				vultite_lock_pick_array.push(temp_id) if temp_vultite_lockpicks_array.include?(temp_name)
+				rolaren_lock_pick_array.push(temp_id) if temp_rolaren_lockpicks_array.include?(temp_name)
+				veniom_lock_pick_array.push(temp_id) if temp_veniom_lockpicks_array.include?(temp_name)
+				invar_lock_pick_array.push(temp_id) if temp_invar_lockpicks_array.include?(temp_name)
+				alum_lock_pick_array.push(temp_id) if temp_alum_lockpicks_array.include?(temp_name)
+				golvern_lock_pick_array.push(temp_id) if temp_golvern_lockpicks_array.include?(temp_name)
+				kelyn_lock_pick_array.push(temp_id) if temp_kelyn_lockpicks_array.include?(temp_name)
+				vaalin_lock_pick_array.push(temp_id) if temp_vaalin_lockpicks_array.include?(temp_name)
 				$scale_trap_weapon_id = temp_id if temp_name =~ /^#{UserVars.tpick["scale_trap_weapon"]}$/
 			end
 			nil
@@ -1623,6 +1762,7 @@ start_solo = proc{
 		tpick_stop_403_404
 		fput "get ##{box}"
 		start_time = Time.now
+		critter_name = nil
 		start_values_nilled.call
 		stuff_to_do.call
 		number_of_manual_trap_checks_remaining = UserVars.tpick["number_of_times_to_check_for_traps"].to_i
@@ -1635,6 +1775,17 @@ start_solo = proc{
 	check_disk.call
 }
 
+encumbrance_check = proc{
+	if percentencumbrance > 99
+		starting_room_number = Room.current.id
+		start_script 'go2', [ 'bank', '--disable-confirm' ]
+		wait_while{ running?('go2') }
+		fput "depo all"
+		start_script "go2", [starting_room_number]
+		wait_while{ running?('go2') }
+	end
+}
+
 start_worker = proc{
 	stow_both.call
 	stuff_to_do.call
@@ -1644,23 +1795,45 @@ start_worker = proc{
 		echo "Get yourself to a worker who assigns you box jobs."
 		exit
 	end
+	encumbrance_check.call if UserVars.tpick["auto_deposit_silvers"] =~ /yes/i
 	fput "ask ##{worker.id} for job"
 	while line = get
 		if line =~ /says\, \"You should finish the job you\'re working on first\.  If you\'re done\, ask me to CHECK it for you\.\"/
 			next_task = nil
 			break
-		elsif line =~ /says\, \"Ah\, here we are\.  The client is offering a tip of (\d+) silver/
+		elsif line =~ /says\, \"Ah\, here we are\.  The client is offering a tip of (\d+) silvers? and mentioned it being from [a-zA-Z]+ (.*) \(level (\d+)\)\./
 			offered_tip_amount = $1.to_i
+			critter_name = $2
+			critter_level = $3.to_i
 			next_task = nil
 			break
-		elsif line =~ /says\, \"We don't have any jobs for you at the moment\./ || line =~ /says\, \"You haven\'t quite reflected on your past failure\.|says\, \"You\'ve done enough boxes for now\./
+		elsif line =~ /says\, \"Ah\, here we are\.  The client is offering a tip of (\d+) silvers? and they aren't sure where it came from/
+			offered_tip_amount = $1.to_i
+			critter_level = 1
+			next_task = nil
+			break
+		elsif line =~ /says\, \"You\'ve done enough boxes for now\.  Why don\'t you ask me again a few minutes from now\.\"/ || line =~ /says\, \"You\'ve done enough for a while\.  Why don\'t you rest your mind a bit\?\"/
+			next_task = "2 minutes"
+			break
+		elsif line =~ /says\, \"You\'ve done enough boxes for now\.  Why don\'t you ask me again about a minute from now\.\"/
+			next_task = "minute"
+			break
+		elsif line =~ /says\, \"We don't have any jobs for you at the moment\./ || line =~ /says\, \"You haven\'t quite reflected on your past failure\.|says\, \"You\'ve done enough/
 			next_task = "wait"
 			break
 		end
 	end
 	if next_task == "wait"
-		echo "No boxes available at the moment, waiting 15 seconds and trying again."
-		sleep 15
+		echo "No boxes available at the moment, waiting 30 seconds and trying again."
+		sleep 30
+		start_worker.call
+	elsif next_task == "minute"
+		echo "No boxes available at the moment, waiting 60 seconds and trying again."
+		sleep 60
+		start_worker.call
+	elsif next_task == "2 minutes"
+		echo "No boxes available at the moment, waiting 120 seconds and trying again."
+		sleep 120
 		start_worker.call
 	else
 		start_worker2.call
@@ -1670,6 +1843,11 @@ start_worker = proc{
 start_worker2 = proc{
 	if offered_tip_amount <= minimum_tip_wanted
 		echo "Minimum tip wanted not met, turning in box."
+		ask_worker.call
+		ask_worker.call
+		start_worker.call
+	elsif critter_level > max_critter_level
+		echo "Critter level too high, turning in box."
 		ask_worker.call
 		ask_worker.call
 		start_worker.call
@@ -1697,6 +1875,7 @@ start_others = proc{
 			fput "accept" if line =~ /^([a-zA-Z]+) offers you (.*) (box|strongbox|coffer|chest|trunk).  Click ACCEPT to accept the offer or DECLINE to decline it.  The offer will expire in 30 seconds\.$/
 			start_time = Time.now
 			tpick_stop_403_404
+			critter_name = nil
 			start_values_nilled.call
 			number_of_manual_trap_checks_remaining = UserVars.tpick["number_of_times_to_check_for_traps"].to_i
 			if (gnomish_bracers) && (bracers_tier == "2")
@@ -1770,6 +1949,7 @@ start_ground = proc{
 			waitrt?
 			box_was_not_locked = nil
 			start_time = Time.now
+			critter_name = nil
 			start_values_nilled.call
 			number_of_manual_trap_checks_remaining = UserVars.tpick["number_of_times_to_check_for_traps"].to_i
 			if popping
@@ -1795,6 +1975,7 @@ start_ground = proc{
 			update_math_information = true
 			total_boxes_picked_math.call
 			if ground_loot
+				encumbrance_check.call if UserVars.tpick["auto_deposit_silvers"] =~ /yes/i
 				if (bash_open_boxes) && (box_was_not_locked == nil)
 					GameObj.loot.each{ |item|
 						waitrt?
@@ -1970,6 +2151,7 @@ check_disk = proc{
 			else
 				fput "get ##{item.id}"
 				start_time = Time.now
+				critter_name = nil
 				start_values_nilled.call
 				number_of_manual_trap_checks_remaining = UserVars.tpick["number_of_times_to_check_for_traps"].to_i
 				if (gnomish_bracers) && (bracers_tier == "2")
@@ -1982,18 +2164,52 @@ check_disk = proc{
 	}
 }
 
+count_boxes_in_disk = proc{
+	stow_in_disk = true
+	unless disk = GameObj.loot.find { |obj| obj.name =~ /#{Char.name} disk|coffin/ }
+		echo "Waiting 5 seconds for disk"
+		50.times { break if GameObj.loot.any? { |obj| obj.name =~ /#{Char.name} disk|coffin/ }; sleep 0.1 }
+			disk = GameObj.loot.find { |obj| obj.name =~ /#{Char.name} disk|coffin/ }
+		end
+	if disk and disk.contents.nil?
+		dothistimeout "look in ##{disk.id}", 3, /In the|There is nothing in/
+	end
+	disk.contents.each{|item|
+		if item.type =~ /box/i
+			total_number_of_boxes += 1
+			$tpick_list_of_box_ids.push(item.id)
+		end
+	}
+}
+
 manually_disarm_trap = proc{
 	waitrt?
 	if solo_or_other == "worker" && current_box.nil?
-		dothistimeout "look on ##{table.id}", 3, /^On the/
-		table.contents.each{ |item|
-			if item.name =~ /#{checkname}/
-				current_box = item
-				break
+		until current_box
+			dothistimeout "look on ##{table.id}", 3, /^On the/
+			table.contents.each{ |item|
+				if item.name =~ /#{checkname}/
+					current_box = item
+					break
+				end
+			}
+			if current_box.nil?
+				table.contents.each{ |item|
+					fput "tap ##{item.id}"
+					while line = get
+						if line =~ /^You probably shouldn\'t do that\./
+							break
+						elsif line =~ /^You tap/
+							current_box = item
+							break
+						end
+					end
+					break if current_box
+				}
 			end
-		}
-		wait_until { current_box }
-		sleep 1
+			sleep 1
+		end
+		echo "Found your box/plinite! Name: #{current_box}, ID: #{current_box.id}, tip: #{offered_tip_amount}, critter name: #{critter_name}, critter level: #{critter_level}"
 	end
 	if current_box.name =~ /plinite/
 		detect_plinite.call
@@ -2031,6 +2247,22 @@ manually_disarm_trap = proc{
 			current_box = GameObj.right_hand
 		end
 		waitrt?
+		sleep 1
+		waitrt?
+		sleep 0.3
+		waitrt?
+		sleep 0.1
+		waitrt?
+		same_scarab_found = GameObj.loot.find{ |i| i.name =~ /#{scarab_name}/ && i.noun == "scarab" }
+		if same_scarab_found
+			echo "Another scarab like yours is already on the ground, waiting up to 10 seconds for it to go away."
+			10.times{
+				same_scarab_found = GameObj.loot.find{ |i| i.name =~ /#{scarab_name}/ && i.noun == "scarab" }
+				break if same_scarab_found.nil?
+				sleep 1
+			}
+		end
+		tpick_say_scarab_found if current_trap_type == "scarab"
 		fput "disarm ##{current_box.id}"
 		while line = get
 			if line =~ /\(.*\-(\d+)\)\./
@@ -2045,8 +2277,15 @@ manually_disarm_trap = proc{
 				end
 				if trap_difficulty > total_trap_skill
 					trap_cant_be_disarmed = true
+				elsif use_404_for_trap_difficulty && Spell[404].known?
+					if trap_difficulty > use_404_for_trap_difficulty
+						if second_trap_check.nil?
+							echo "Trap difficulty is higher than your setting in the setup menu for when to use Disarm Enhancement (404), going to use Disarm Enhancement (404)."
+						end
+						need_404 = "yes"
+					end
 				elsif trap_difficulty > disarm_skill && Spell[404].known?
-					if second_trap_check == nil
+					if second_trap_check.nil?
 						echo "This trap looks tough, going to use Disarm Enhancement (404)."
 					end
 					need_404 = "yes"
@@ -2062,7 +2301,8 @@ manually_disarm_trap = proc{
 				current_trap_type = "Couldn't disarm trap, trying again."
 	#####Scarab information#####
 			#Manual detection
-			elsif line =~ /Peering closely into the lock\, you spy.*scarab wedged into the lock mechanism\./
+			elsif line =~ /Peering closely into the lock\, you spy an? [a-zA-Z]+ (.*) scarab wedged into the lock mechanism\./
+				scarab_name = $1
 				CharSettings['scarab'] += 1
 				CharSettings['total_trap_count'] += 1
 				current_trap_type = "scarab"
@@ -2111,7 +2351,7 @@ manually_disarm_trap = proc{
 				current_trap_type = "Jaws trap has already been disarmed."
 				break
 			#Already disarmed with 408
-			elsif line =~ /You see a pair of metal jaws clamped tightly before the lockplate on the.*(box|strongbox|chest|trunk|coffer)\./
+			elsif line =~ /You see a pair of metal jaws clamped tightly before the lockplate on the.*(box|strongbox|chest|trunk|coffer)\.|The jaws are surrounded with a reddish glow\./
 				current_trap_type = "Jaws trap has already been disarmed with 408. Can't pick it."
 				break
 			#Trap has already been set off
@@ -2377,7 +2617,7 @@ manually_disarm_trap = proc{
 				current_trap_type = "No trap found."
 				break
 	#####Box is already open#####
-			elsif line =~ /Um, but it\'s open/
+			elsif line =~ /Um, but it\'s open|There is no lock on that/
 				current_trap_type = "Box is already open."
 				box_counts_for_math = nil
 				break
@@ -2442,13 +2682,17 @@ manually_disarm_trap = proc{
 					(tpick_cast_spells (506)) if (use_spell_506)
 					sleep 1
 					waitrt?
-					fput "disarm scarab"
+					scarab_object = GameObj.loot.find{ |i| i.name =~ /#{scarab_name}/ && i.noun == "scarab" }
+					fput "disarm ##{scarab_object.id}"
+					tpick_say_scarab_safe
 					waitrt?
-					fput "get scarab"
-					fput "stow my scarab"
+					fput "get ##{scarab_object.id}"
+					fput "stow ##{scarab_object.id}"
 				end
 				stow_left.call
-				stow_right.call if solo_or_other == "ground" || solo_or_other == "worker"
+				if (GameObj.right_hand.id != current_box.id) && (solo_or_other == "ground" || solo_or_other == "worker")
+					stow_right.call
+				end
 				if (disarm_only)
 					if (bash_open_boxes)
 						bash_the_box_open.call
@@ -2562,7 +2806,7 @@ open_all_containers = proc{
 	lockpick_container_close = true if temp_container[1] =~ /close/
 	lockpick_container = GameObj.inv.find{ |i| i.name =~ /#{lockpick_container}/ }
 
-	if lockpick_container.contents.nil? && !open_or_close_containers.include?(lockpick_container.id)
+	if !open_or_close_containers.include?(lockpick_container.id)
 		open_or_close_containers.push(lockpick_container.id)
 		fput "open ##{lockpick_container.id}"
 	end
@@ -2571,7 +2815,7 @@ open_all_containers = proc{
 	broken_lockpick_container = temp_container[0]
 	broken_lockpick_container_close = true if temp_container[1] =~ /close/
 	broken_lockpick_container = GameObj.inv.find{ |i| i.name =~ /#{broken_lockpick_container}/ }
-	if broken_lockpick_container.contents.nil? && !open_or_close_containers.include?(broken_lockpick_container.id)
+	if !open_or_close_containers.include?(broken_lockpick_container.id)
 		open_or_close_containers.push(broken_lockpick_container.id)
 		fput "open ##{broken_lockpick_container.id}"
 	end
@@ -2580,7 +2824,7 @@ open_all_containers = proc{
 	wedge_container = temp_container[0]
 	wedge_container_close = true if temp_container[1] =~ /close/
 	wedge_container = GameObj.inv.find{ |i| i.name =~ /#{wedge_container}/ }
-	if wedge_container.contents.nil? && !open_or_close_containers.include?(wedge_container.id)
+	if !open_or_close_containers.include?(wedge_container.id)
 		open_or_close_containers.push(wedge_container.id)
 		fput "open ##{wedge_container.id}"
 	end
@@ -2589,7 +2833,7 @@ open_all_containers = proc{
 	calipers_container = temp_container[0]
 	calipers_container_close = true if temp_container[1] =~ /close/
 	calipers_container = GameObj.inv.find{ |i| i.name =~ /#{calipers_container}/ }
-	if calipers_container.contents.nil? && !open_or_close_containers.include?(calipers_container.id)
+	if !open_or_close_containers.include?(calipers_container.id)
 		open_or_close_containers.push(calipers_container.id)
 		fput "open ##{calipers_container.id}"
 	end
@@ -2598,7 +2842,7 @@ open_all_containers = proc{
 	scale_weapon_container = temp_container[0]
 	scale_weapon_container_close = true if temp_container[1] =~ /close/
 	scale_weapon_container = GameObj.inv.find{ |i| i.name =~ /#{scale_weapon_container}/ }
-	if scale_weapon_container.contents.nil? && !open_or_close_containers.include?(scale_weapon_container.id)
+	if !open_or_close_containers.include?(scale_weapon_container.id)
 		open_or_close_containers.push(scale_weapon_container.id)
 		fput "open ##{scale_weapon_container.id}"
 	end
@@ -2607,7 +2851,7 @@ open_all_containers = proc{
 	locksmiths_container = temp_container[0]
 	locksmiths_container_close = true if temp_container[1] =~ /close/
 	locksmiths_container = GameObj.inv.find{ |i| i.name =~ /#{locksmiths_container}/ }
-	if locksmiths_container.contents.nil? && !open_or_close_containers.include?(locksmiths_container.id)
+	if !open_or_close_containers.include?(locksmiths_container.id)
 		open_or_close_containers.push(locksmiths_container.id)
 		fput "open ##{locksmiths_container.id}"
 	end
@@ -2616,7 +2860,7 @@ open_all_containers = proc{
 	gem_container = temp_container[0]
 	gem_container_close = true if temp_container[1] =~ /close/
 	gem_container = GameObj.inv.find{ |i| i.name =~ /#{gem_container}/ }
-	if gem_container.contents.nil? && !open_or_close_containers.include?(gem_container.id)
+	if !open_or_close_containers.include?(gem_container.id)
 		open_or_close_containers.push(gem_container.id)
 		fput "open ##{gem_container.id}"
 	end
@@ -2657,7 +2901,11 @@ scaledisarm = proc{
 	result = dothistimeout "disarm ##{current_box.id}", 3, /slice through the cord/i
 	if result =~ /slice through the cord/
 		waitrt?
-		fput "put ##{$scale_trap_weapon_id} in ##{scale_weapon_container.id}"
+		if scale_weapon_container.nil?
+			fput "put ##{$scale_trap_weapon_id} in my #{UserVars.tpick["scale_weapon_container"]}"
+		else
+			fput "put ##{$scale_trap_weapon_id} in ##{scale_weapon_container.id}"
+		end
 		if solo_or_other == "solo"
 			open_solo.call
 		elsif solo_or_other == "other"
@@ -2669,7 +2917,11 @@ scaledisarm = proc{
 		end
 	elsif result.nil?
 		waitrt?
-		fput "put ##{$scale_trap_weapon_id} in ##{scale_weapon_container.id}"
+		if scale_weapon_container.nil?
+			fput "put ##{$scale_trap_weapon_id} in my #{UserVars.tpick["scale_weapon_container"]}"
+		else
+			fput "put ##{$scale_trap_weapon_id} in ##{scale_weapon_container.id}"
+		end
 		tpick_cast_spells (404)
 		scaledisarm.call
 	end
@@ -2714,6 +2966,95 @@ plate = proc{
 	end
 }
 
+measure_detection = proc{
+	if Char.prof == 'Rogue'
+		echo "Measuring lock."
+		3.times{
+			waitrt?
+			unless GameObj.right_hand.name =~ /calipers/ || GameObj.left_hand.name =~ /calipers/
+				fput "get my calipers"
+				sleep 0.2
+			end
+		}
+		if GameObj.right_hand.name !~ /calipers/ && GameObj.left_hand.name !~ /calipers/
+			echo "Couldn't find your calipers."
+			exit
+		end
+		fput "lmaster measure ##{current_box.id}"
+	elsif Char.prof == 'Bard'
+		echo "Loresinging to box to find out lock difficulty."
+		tpick_get_box(current_box) if solo_or_other == "ground"
+		fput "speak bard"
+		if solo_or_other == "worker"
+			fput "loresing ::#{checkname} #{current_box.noun} on table:: #{current_box.noun} that looks like a clock;What's the purpose of your lock?"
+		else
+			fput "loresing #{checkright} that I hold;let your purpose now be told"
+		end
+	end
+	while line = get
+		(lock = lock_difficulty[0];break) if line =~ /a primitive lock/i
+		(lock = lock_difficulty[1];break) if line =~ /a rudimentary lock/i
+		(lock = lock_difficulty[2];break) if line =~ /an extremely easy lock/i
+		(lock = lock_difficulty[3];break) if line =~ /a very easy lock/i
+		(lock = lock_difficulty[4];break) if line =~ /an easy lock/i
+		(lock = lock_difficulty[5];break) if line =~ /a very basic lock/i
+		(lock = lock_difficulty[6];break) if line =~ /a fairly easy lock/i
+		(lock = lock_difficulty[7];break) if line =~ /a simple lock/i
+		(lock = lock_difficulty[8];break) if line =~ /a fairly simple lock/i
+		(lock = lock_difficulty[9];break) if line =~ /a fairly plain lock/i
+		(lock = lock_difficulty[10];break) if line =~ /a moderately well-crafted lock/i
+		(lock = lock_difficulty[11];break) if line =~ /a well-crafted lock/i
+		(lock = lock_difficulty[12];break) if line =~ /a tricky lock/i
+		(lock = lock_difficulty[13];break) if line =~ /a somewhat difficult lock/i
+		(lock = lock_difficulty[14];break) if line =~ /a moderately difficult lock/i
+		(lock = lock_difficulty[15];break) if line =~ /a very well-crafted lock/i
+		(lock = lock_difficulty[16];break) if line =~ /a difficult lock/i
+		(lock = lock_difficulty[17];break) if line =~ /an extremely well-crafted lock/i
+		(lock = lock_difficulty[18];break) if line =~ /a very difficult lock/i
+		(lock = lock_difficulty[19];break) if line =~ /a fairly complicated lock/i
+		(lock = lock_difficulty[20];break) if line =~ /an intricate lock/i
+		(lock = lock_difficulty[21];break) if line =~ /an amazingly well-crafted lock/i
+		(lock = lock_difficulty[22];break) if line =~ /a very complex lock/i
+		(lock = lock_difficulty[23];break) if line =~ /an impressively complicated lock/i
+		(lock = lock_difficulty[24];break) if line =~ /an amazingly intricate lock/i
+		(lock = lock_difficulty[25];break) if line =~ /an extremely difficult lock/i
+		(lock = lock_difficulty[26];break) if line =~ /an extremely complex lock/i
+		(lock = lock_difficulty[27];break) if line =~ /a masterfully well-crafted lock/i
+		(lock = lock_difficulty[28];break) if line =~ /an amazingly complicated lock/i
+		(lock = lock_difficulty[29];break) if line =~ /an astoundingly complex lock/i
+		(lock = lock_difficulty[30];break) if line =~ /an incredibly intricate lock/i
+		(lock = lock_difficulty[31];break) if line =~ /an absurdly well-crafted lock/i
+		(lock = lock_difficulty[32];break) if line =~ /an exceedingly complex lock/i
+		(lock = lock_difficulty[33];break) if line =~ /an absurdly difficult lock/i
+		(lock = lock_difficulty[34];break) if line =~ /an unbelievably complicated lock/i
+		(lock = lock_difficulty[35];break) if line =~ /a masterfully intricate lock/i
+		(lock = lock_difficulty[36];break) if line =~ /an absurdly complex lock/i
+		(lock = lock_difficulty[37];break) if line =~ /an impossibly complex lock/i
+		if line =~ /You place the probe in the lock and grimace as something feels horribly wrong/i #This game line indicates the rogue is trying to measure a box with calipers when the box still has an active trap, since all soul golem boxes are technically trapped (the trap just randomizes the difficulty of the lock) this line will appear on every soul golem box. The solution below is to use a vaalin lockpick on soul golem boxes from the worker and to turn in all other boxes when this message appears. When not picking boxes from the worker the script will still use a vaalin lockpick.
+			if critter_name =~ /soul golem/i
+				lock = "need vaalin"
+				break
+			else
+				if solo_or_other == "worker"
+					ask_worker.call
+					break
+				else
+					lock = "need vaalin"
+					break
+				end
+			end
+		end
+		(lock = "not locked";break) if line =~ /has already been unlocked/i
+		(lock = "can't find trap";break) if line =~ /As you start to place the probe in the lock/
+		(lock = "can't measure";break) if line =~ /but your song simply wasn't powerful enough/
+	end
+	waitrt?
+	number_of_times_to_measure += 1
+	if lock == "can't measure" && number_of_times_to_measure < 3
+		measure_detection.call
+	end
+}
+
 measure = proc{
 	stuff_to_do.call if solo_or_other == "solo"
 	waitrt?
@@ -2722,7 +3063,7 @@ measure = proc{
 	if (always_use_vaalin)
 		echo "Always use vaalin setting enabled, using a vaalin lockpick."
 		needed_pick = UserVars.tpick["vaalin"]
-		needed_pick_id = $vaalin_lockpick_id
+		needed_pick_id = vaalin_lock_pick_array.first
 		need_403 = "yes" unless UserVars.tpick["always_use_403"] == "never"
 		recommended_pick = "vaalin"
 		recommended_pick_modifier = 2.50
@@ -2731,7 +3072,7 @@ measure = proc{
 		echo "Always use vaalin when fried enabled, using a vaalin lockpick."
 		(box_counts_for_math = nil)
 		needed_pick = UserVars.tpick["vaalin"]
-		needed_pick_id = $vaalin_lockpick_id
+		needed_pick_id = vaalin_lock_pick_array.first
 		recommended_pick = "vaalin"
 		recommended_pick_modifier = 2.50
 		need_403 = "yes" unless UserVars.tpick["always_use_403"] == "never"
@@ -2739,7 +3080,7 @@ measure = proc{
 	elsif start_with_copper
 		echo "Start with copper option enabled, starting with lockpick in your copper lockpick setting."
 		needed_pick = UserVars.tpick["copper"]
-		needed_pick_id = $copper_lockpick_id
+		needed_pick_id = copper_lock_pick_array.first
 		recommended_pick = "copper"
 		recommended_pick_modifier = 1.00
 		pick2.call	
@@ -2765,72 +3106,8 @@ measure = proc{
 	else
 		waitrt?
 		if (found_true_lock_difficulty == nil)
-			if Char.prof == 'Rogue'
-				echo "Measuring lock."
-				3.times{
-					waitrt?
-					unless GameObj.right_hand.name =~ /calipers/ || GameObj.left_hand.name =~ /calipers/
-						fput "get my calipers"
-						sleep 0.2
-					end
-				}
-				if GameObj.right_hand.name !~ /calipers/ && GameObj.left_hand.name !~ /calipers/
-					echo "Couldn't find your calipers."
-					exit
-				end
-				fput "lmaster measure ##{current_box.id}"
-			elsif Char.prof == 'Bard'
-				echo "Loresinging to box to find out lock difficulty."
-				tpick_get_box(current_box) if solo_or_other == "ground"
-				fput "speak bard"
-				if solo_or_other == "worker"
-					fput "loresing ::#{checkname} #{current_box.noun} on table:: #{current_box.noun} that looks like a clock;What's the purpose of your lock?"
-				else
-					fput "loresing #{checkright} that I hold;let your purpose now be told"
-				end
-			end
-			while line = get
-				(lock = lock_difficulty[0];break) if line =~ /a primitive lock/i
-				(lock = lock_difficulty[1];break) if line =~ /a rudimentary lock/i
-				(lock = lock_difficulty[2];break) if line =~ /an extremely easy lock/i
-				(lock = lock_difficulty[3];break) if line =~ /a very easy lock/i
-				(lock = lock_difficulty[4];break) if line =~ /an easy lock/i
-				(lock = lock_difficulty[5];break) if line =~ /a very basic lock/i
-				(lock = lock_difficulty[6];break) if line =~ /a fairly easy lock/i
-				(lock = lock_difficulty[7];break) if line =~ /a simple lock/i
-				(lock = lock_difficulty[8];break) if line =~ /a fairly simple lock/i
-				(lock = lock_difficulty[9];break) if line =~ /a fairly plain lock/i
-				(lock = lock_difficulty[10];break) if line =~ /a moderately well-crafted lock/i
-				(lock = lock_difficulty[11];break) if line =~ /a well-crafted lock/i
-				(lock = lock_difficulty[12];break) if line =~ /a tricky lock/i
-				(lock = lock_difficulty[13];break) if line =~ /a somewhat difficult lock/i
-				(lock = lock_difficulty[14];break) if line =~ /a moderately difficult lock/i
-				(lock = lock_difficulty[15];break) if line =~ /a very well-crafted lock/i
-				(lock = lock_difficulty[16];break) if line =~ /a difficult lock/i
-				(lock = lock_difficulty[17];break) if line =~ /an extremely well-crafted lock/i
-				(lock = lock_difficulty[18];break) if line =~ /a very difficult lock/i
-				(lock = lock_difficulty[19];break) if line =~ /a fairly complicated lock/i
-				(lock = lock_difficulty[20];break) if line =~ /an intricate lock/i
-				(lock = lock_difficulty[21];break) if line =~ /an amazingly well-crafted lock/i
-				(lock = lock_difficulty[22];break) if line =~ /a very complex lock/i
-				(lock = lock_difficulty[23];break) if line =~ /an impressively complicated lock/i
-				(lock = lock_difficulty[24];break) if line =~ /an amazingly intricate lock/i
-				(lock = lock_difficulty[25];break) if line =~ /an extremely difficult lock/i
-				(lock = lock_difficulty[26];break) if line =~ /an extremely complex lock/i
-				(lock = lock_difficulty[27];break) if line =~ /a masterfully well-crafted lock/i
-				(lock = lock_difficulty[28];break) if line =~ /an amazingly complicated lock/i
-				(lock = lock_difficulty[29];break) if line =~ /an astoundingly complex lock/i
-				(lock = lock_difficulty[30];break) if line =~ /an incredibly intricate lock/i
-				(lock = lock_difficulty[31];break) if line =~ /an absurdly well-crafted lock/i
-				(lock = lock_difficulty[32];break) if line =~ /an exceedingly complex lock/i
-				(lock = lock_difficulty[33];break) if line =~ /an absurdly difficult lock/i
-				(lock = lock_difficulty[34];break) if line =~ /an unbelievably complicated lock/i
-				(lock = lock_difficulty[35];break) if line =~ /a masterfully intricate lock/i
-				(lock = lock_difficulty[36];break) if line =~ /an absurdly complex lock/i
-				(lock = lock_difficulty[37];break) if line =~ /an impossibly complex lock/i
-				(lock = "not locked";break) if line =~ /has already been unlocked/i
-			end
-			waitrt?
+			number_of_times_to_measure = 0
+			measure_detection.call
 			fput "speak common" if Char.prof == 'Bard'
 			if Char.prof == 'Rogue'
 				stow_calipers.call
@@ -2852,6 +3129,45 @@ measure = proc{
 			elsif solo_or_other == "worker"
 				nil
 			end
+		elsif lock == "can't find trap"
+			echo "Doesn't look like you have the skill to detect the trap on this box."
+			box_counts_for_math = nil
+			if solo_or_other == "solo"
+				where_to_stow_box.call
+			elsif solo_or_other == "other"
+				tpick_say_cant
+				open_others.call
+			elsif solo_or_other == "ground"
+				nil
+			elsif solo_or_other == "worker"
+				ask_worker.call
+			end
+		elsif lock == "can't measure"
+			echo "You can't determine the lock difficulty."
+			box_counts_for_math = nil
+			if solo_or_other == "solo"
+				where_to_stow_box.call
+			elsif solo_or_other == "other"
+				tpick_say_cant
+				open_others.call
+			elsif solo_or_other == "ground"
+				nil
+			elsif solo_or_other == "worker"
+				ask_worker.call
+			end
+		elsif lock == "need vaalin"
+			needed_pick = UserVars.tpick["vaalin"]
+			needed_pick_id = vaalin_lock_pick_array.first
+			recommended_pick = "vaalin"
+			recommended_pick_modifier = 2.50
+			echo "Recommended lock pick: #{recommended_pick} with a modifier of #{recommended_pick_modifier}"
+			echo "Recommend 403: No"
+			echo "Your calculated lockpicking skill: #{pick_skill}"
+			temp_math_number = pick_skill
+			quick_maths = (temp_math_number * recommended_pick_modifier).truncate
+			echo "Your total picking skill for this attempt is: #{quick_maths}"
+			echo "Lock difficulty: #{lock}"
+			pick2.call
 		else
 			total_pick_skill = (pick_skill + pick_lore) * 2.50
 			if lock > (total_pick_skill + UserVars.tpick["vaalin_lock_roll"].to_i)
@@ -2877,7 +3193,7 @@ measure = proc{
 					total_pick_skill = (pick_skill + pick_lore)
 					if (total_pick_skill) * 2.50 - lock + UserVars.tpick["lock_roll"].to_i < 100
 						needed_pick = UserVars.tpick["vaalin"]
-						needed_pick_id = $vaalin_lockpick_id
+						needed_pick_id = vaalin_lock_pick_array.first
 						need_403 = "yes" unless UserVars.tpick["always_use_403"] == "never"
 						i_need_403 = true unless UserVars.tpick["always_use_403"] == "never"
 						number = 15
@@ -2892,6 +3208,9 @@ measure = proc{
 						else
 							break
 						end
+					end
+					if use_403_for_lock_difficulty && Spell[403].known? && lock > use_403_for_lock_difficulty
+						i_need_403 = true
 					end
 				end
 				if i_need_403
@@ -2908,88 +3227,92 @@ measure = proc{
 				end
 				if number == 0
 					needed_pick = UserVars.tpick["copper"]
-					needed_pick_id = $copper_lockpick_id
+					needed_pick_id = copper_lock_pick_array.first
 					recommended_pick = "copper"
 					recommended_pick_modifier = 1.00
 				elsif number == 1
 					needed_pick = UserVars.tpick["steel"]
-					needed_pick_id = $steel_lockpick_id
+					needed_pick_id = steel_lock_pick_array.first
 					recommended_pick = "steel"
 					recommended_pick_modifier = 1.10
 				elsif number == 2
 					needed_pick = UserVars.tpick["gold"]
-					needed_pick_id = $gold_lockpick_id
+					needed_pick_id = gold_lock_pick_array.first
 					recommended_pick = "gold"
 					recommended_pick_modifier = 1.20
 				elsif number == 3
 					needed_pick = UserVars.tpick["silver"]
-					needed_pick_id = $silver_lockpick_id
+					needed_pick_id = silver_lock_pick_array.first
 					recommended_pick = "silver"
 					recommended_pick_modifier = 1.30
 				elsif number == 4
 					needed_pick = UserVars.tpick["mithril"]
-					needed_pick_id = $mithril_lockpick_id
+					needed_pick_id = mithril_lock_pick_array.first
 					recommended_pick = "mithril"
 					recommended_pick_modifier = 1.45
 				elsif number == 5
 					needed_pick = UserVars.tpick["ora"]
-					needed_pick_id = $ora_lockpick_id
+					needed_pick_id = ora_lock_pick_array.first
 					recommended_pick = "ora"
 					recommended_pick_modifier = 1.55
 				elsif number == 6
 					needed_pick = UserVars.tpick["glaes"]
-					needed_pick_id = $glaes_lockpick_id
+					needed_pick_id = glaes_lock_pick_array.first
 					recommended_pick = "glaes"
 					recommended_pick_modifier = 1.60
 				elsif number == 7
 					needed_pick = UserVars.tpick["laje"]
-					needed_pick_id = $laje_lockpick_id
+					needed_pick_id = laje_lock_pick_array.first
 					recommended_pick = "laje"
 					recommended_pick_modifier = 1.75
 				elsif number == 8
 					needed_pick = UserVars.tpick["vultite"]
-					needed_pick_id = $vultite_lockpick_id
+					needed_pick_id = vultite_lock_pick_array.first
 					recommended_pick = "vultite"
 					recommended_pick_modifier = 1.80
 				elsif number == 9
 					needed_pick = UserVars.tpick["rolaren"]
-					needed_pick_id = $rolaren_lockpick_id
+					needed_pick_id = rolaren_lock_pick_array.first
 					recommended_pick = "rolaren"
 					recommended_pick_modifier = 1.90
 				elsif number == 10
 					needed_pick = UserVars.tpick["veniom"]
-					needed_pick_id = $veniom_lockpick_id
+					needed_pick_id = veniom_lock_pick_array.first
 					recommended_pick = "veniom"
 					recommended_pick_modifier = 2.20
 				elsif number == 11
 					needed_pick = UserVars.tpick["invar"]
-					needed_pick_id = $invar_lockpick_id
+					needed_pick_id = invar_lock_pick_array.first
 					recommended_pick = "invar"
 					recommended_pick_modifier = 2.25
 				elsif number == 12
 					needed_pick = UserVars.tpick["alum"]
-					needed_pick_id = $alum_lockpick_id
+					needed_pick_id = alum_lock_pick_array.first
 					recommended_pick = "alum"
 					recommended_pick_modifier = 2.30
 				elsif number == 13
 					needed_pick = UserVars.tpick["golvern"]
-					needed_pick_id = $golvern_lockpick_id
+					needed_pick_id = golvern_lock_pick_array.first
 					recommended_pick = "golvern"
 					recommended_pick_modifier = 2.35
 				elsif number == 14
 					needed_pick = UserVars.tpick["kelyn"]
-					needed_pick_id = $kelyn_lockpick_id
+					needed_pick_id = kelyn_lock_pick_array.first
 					recommended_pick = "kelyn"
 					recommended_pick_modifier = 2.40
 				elsif number > 14
 					needed_pick = UserVars.tpick["vaalin"]
-					needed_pick_id = $vaalin_lockpick_id
+					needed_pick_id = vaalin_lock_pick_array.first
 					recommended_pick = "vaalin"
 					recommended_pick_modifier = 2.50
 				end
 				echo "Recommended lock pick: #{recommended_pick} with a modifier of #{recommended_pick_modifier}"
 				if need_403 == "yes"
-					echo "Recommend 403: Yes"
+					if use_403_for_lock_difficulty && Spell[403].known? && lock > use_403_for_lock_difficulty
+						echo "Lock difficulty is higher than your 403 setting in setup menu, using 403."
+					else
+						echo "Recommend 403: Yes"
+					end
 					echo "Your calculated lockpicking skill: #{pick_skill}"
 					echo "Your calculated lockpicking lore: #{pick_lore}"
 					temp_math_number = pick_skill + pick_lore
@@ -2998,10 +3321,15 @@ measure = proc{
 					echo "Your calculated lockpicking skill: #{pick_skill}"
 					temp_math_number = pick_skill
 				end
-				quick_maths = temp_math_number * recommended_pick_modifier
+				quick_maths = (temp_math_number * recommended_pick_modifier).truncate
 				echo "Your total picking skill for this attempt is: #{quick_maths}"
 				echo "Lock difficulty: #{lock}"
-				pick2.call
+				if needed_pick_id.nil?
+					echo "All of your #{recommended_pick} lockpicks seem to be broken, trying a higher tier lockpick."
+					nextpick.call
+				else
+					pick2.call
+				end
 			end
 		end
 	end
@@ -3042,7 +3370,7 @@ find_gnomish_lockpick = proc{
 
 pick2 = proc{
 	waitrt?
-	if (gnomish_bracers)
+	if (gnomish_bracers) && override_bracers != "override"
 		find_gnomish_lockpick.call
 	else
 		3.times{
@@ -3078,9 +3406,14 @@ pick3 = proc{
 	end
 	if (open_plinites) || current_box.name =~ /plinite/
 		fput "extract ##{current_box.id}"
-	elsif (gnomish_bracers)
+	elsif gnomish_bracers && override_bracers != "override"
+		tpick_get_box(current_box) if solo_or_other == "ground"
 		fput "push my #{gnomish_bracers}"
 	else
+		if UserVars.tpick["trick"] == "random" && Char.prof =~ /Rogue/
+			random_trick = [ "spin", "twist", "turn", "twirl", "toss", "bend", "flip" ].sample
+			do_trick = "lmas ptrick #{random_trick}"
+		end
 		fput "#{do_trick} ##{current_box.id}"
 	end
 	if (open_plinites) || current_box.name =~ /plinite/
@@ -3100,8 +3433,41 @@ pick3 = proc{
 				waitrt?
 				next_task = "pick3"
 				break
-			elsif line =~ /with the feeling that your abilities are probably not sufficient to retrieve the core/
-				stow_right.call if solo_or_other == "worker"
+			elsif line =~ /with the feeling that your abilities are probably not sufficient to retrieve the core/ || line =~ /You fumble about for a bit before you realize you are using a broken lockpick/
+				if (GameObj.right_hand.id != current_box.id) && (solo_or_other == "ground" || solo_or_other == "worker")
+					if line =~ /You fumble about for a bit before you realize you are using a broken lockpick/
+						3.times{
+							waitrt?
+							unless GameObj.right_hand.id != needed_pick_id && GameObj.left_hand.id != needed_pick_id
+								fput "put ##{needed_pick_id} in ##{broken_lockpick_container.id}"
+								sleep 0.2
+							end
+						}
+						if GameObj.right_hand.id == needed_pick_id || GameObj.left_hand.id == needed_pick_id
+							echo "Couldn't put lockpick in your #{broken_lockpick_container}."
+							sleep 2
+							fput "stow ##{needed_pick_id}"
+						end
+						copper_lock_pick_array.delete(copper_lock_pick_array.first) if needed_pick_id == copper_lock_pick_array.first
+						steel_lock_pick_array.delete(steel_lock_pick_array.first) if needed_pick_id == steel_lock_pick_array.first
+						gold_lock_pick_array.delete(gold_lock_pick_array.first) if needed_pick_id == gold_lock_pick_array.first
+						silver_lock_pick_array.delete(silver_lock_pick_array.first) if needed_pick_id == silver_lock_pick_array.first
+						mithril_lock_pick_array.delete(mithril_lock_pick_array.first) if needed_pick_id == mithril_lock_pick_array.first
+						ora_lock_pick_array.delete(ora_lock_pick_array.first) if needed_pick_id == ora_lock_pick_array.first
+						glaes_lock_pick_array.delete(glaes_lock_pick_array.first) if needed_pick_id == glaes_lock_pick_array.first
+						laje_lock_pick_array.delete(laje_lock_pick_array.first) if needed_pick_id == laje_lock_pick_array.first
+						vultite_lock_pick_array.delete(vultite_lock_pick_array.first) if needed_pick_id == vultite_lock_pick_array.first
+						rolaren_lock_pick_array.delete(rolaren_lock_pick_array.first) if needed_pick_id == rolaren_lock_pick_array.first
+						veniom_lock_pick_array.delete(veniom_lock_pick_array.first) if needed_pick_id == veniom_lock_pick_array.first
+						invar_lock_pick_array.delete(invar_lock_pick_array.first) if needed_pick_id == invar_lock_pick_array.first
+						alum_lock_pick_array.delete(alum_lock_pick_array.first) if needed_pick_id == alum_lock_pick_array.first
+						golvern_lock_pick_array.delete(golvern_lock_pick_array.first) if needed_pick_id == golvern_lock_pick_array.first
+						kelyn_lock_pick_array.delete(kelyn_lock_pick_array.first) if needed_pick_id == kelyn_lock_pick_array.first
+						vaalin_lock_pick_array.delete(vaalin_lock_pick_array.first) if needed_pick_id == vaalin_lock_pick_array.first
+					else
+						stow_right.call
+					end
+				end
 				stow_left.call
 				if needed_pick == UserVars.tpick["vaalin"]
 					if solo_or_other == "worker"
@@ -3131,14 +3497,14 @@ pick3 = proc{
 					next_task = "pick3"
 					break
 				end
-			elsif line =~ /(You struggle with the .*\.  As you do\, you get a sense that the .* has .* \(.* thief\-lingo difficulty ranking\)\.  Then\.\.\.CLICK\!  It opens\!|It opens|as the tumblers snap open|It does not appear to be locked|already been unlocked)/
+			elsif line =~ /(You struggle with the .*\.  As you do\, you get a sense that the .* has .* \(.* thief\-lingo difficulty ranking\)\.  Then\.\.\.CLICK\!  It opens\!|as the tumblers snap open|It does not appear to be locked|already been unlocked)/
 				if line =~ /(It does not appear to be locked|already been unlocked)/
 					box_counts_for_math = nil
 				end
 				calibrate_count += 1
 				waitrt?
-				fput "put ##{needed_pick_id} in ##{lockpick_container.id}" unless gnomish_bracers
-				if line =~ /You struggle with the .*\.  As you do\, you get a sense that the .* has .* \(.* thief\-lingo difficulty ranking\)\.  Then\.\.\.CLICK\!  It opens\!|It opens|as the tumblers snap open/i && calibrate_count >= UserVars.tpick["calibratecount"].to_i
+				fput "put ##{needed_pick_id} in ##{lockpick_container.id}" unless gnomish_bracers && override_bracers != "override"
+				if line =~ /You struggle with the .*\.  As you do\, you get a sense that the .* has .* \(.* thief\-lingo difficulty ranking\)\.  Then\.\.\.CLICK\!  It opens\!|as the tumblers snap open/i && calibrate_count >= UserVars.tpick["calibratecount"].to_i
 					if can_use_calipers && always_use_vaalin.nil? && start_with_copper.nil?
 						calibrate.call unless popping
 					end
@@ -3151,7 +3517,7 @@ pick3 = proc{
 				elsif solo_or_other == "other"
 					next_task = "open_other"
 				elsif solo_or_other == "ground"
-					tpick_drop_box(current_box) if gnomish_bracers
+					tpick_drop_box(current_box) if gnomish_bracers && override_bracers != "override"
 					next_task = "open_ground"
 				elsif solo_or_other == "worker"
 					next_task = "worker finished"
@@ -3165,7 +3531,7 @@ pick3 = proc{
 			elsif (line =~ /(bit more luck|within your abilities)/i) || ((line =~ /You are not able to pick the .*\, but you get a sense that it has .*\. About a \-(\d+) difficulty lock/) || (line =~ /(As you do\, you get a sense that the .* has .* \(\-(\d+) thief\-lingo difficulty ranking\))/) && (found_true_lock_difficulty))
 				waitrt?
 				if (roll_amount > UserVars.tpick["lock_roll"].to_i)
-					fput "put ##{needed_pick_id} in ##{lockpick_container.id}" unless gnomish_bracers
+					fput "put ##{needed_pick_id} in ##{lockpick_container.id}" unless gnomish_bracers && override_bracers != "override"
 					(next_task = "nextpick")
 				else
 					next_task = "pick3"
@@ -3178,18 +3544,24 @@ pick3 = proc{
 						if solo_or_other != "ground" && solo_or_other != "worker"
 							tpick_stow_box(current_box)
 							fput "lmas repair my #{checkleft}"
+							waitrt?
+							sleep 1
+							waitrt?
 							tpick_get_box(current_box)
 						elsif solo_or_other == "ground" || solo_or_other == "worker"
 							fput "lmas repair my #{checkright}"
+							waitrt?
+							sleep 1
+							waitrt?
 						end
 					end
 					roll_amount = 100
-					fput "put ##{needed_pick_id} in ##{lockpick_container.id}" unless gnomish_bracers
+					fput "put ##{needed_pick_id} in ##{lockpick_container.id}" unless gnomish_bracers && override_bracers != "override"
 				elsif line =~ /You are not able to pick/ && needed_pick != UserVars.tpick["vaalin"]
-					fput "put ##{needed_pick_id} in ##{lockpick_container.id}" unless gnomish_bracers
+					fput "put ##{needed_pick_id} in ##{lockpick_container.id}" unless gnomish_bracers && override_bracers != "override"
 				elsif line =~ /You are not able to pick/ && needed_pick == UserVars.tpick["vaalin"]
 					if roll_amount > UserVars.tpick["vaalin_lock_roll"].to_i
-						fput "put ##{needed_pick_id} in ##{lockpick_container.id}" unless gnomish_bracers
+						fput "put ##{needed_pick_id} in ##{lockpick_container.id}" unless gnomish_bracers && override_bracers != "override"
 						roll_amount = 100
 					end
 				end
@@ -3198,6 +3570,22 @@ pick3 = proc{
 			elsif line =~ /(You broke your|you realize you are using a broken|You carefully try to work it free but end up snapping off the tip)/i
 				echo "#{needed_pick} is broken."
 				waitrt?
+				copper_lock_pick_array.delete(copper_lock_pick_array.first) if needed_pick_id == copper_lock_pick_array.first
+				steel_lock_pick_array.delete(steel_lock_pick_array.first) if needed_pick_id == steel_lock_pick_array.first
+				gold_lock_pick_array.delete(gold_lock_pick_array.first) if needed_pick_id == gold_lock_pick_array.first
+				silver_lock_pick_array.delete(silver_lock_pick_array.first) if needed_pick_id == silver_lock_pick_array.first
+				mithril_lock_pick_array.delete(mithril_lock_pick_array.first) if needed_pick_id == mithril_lock_pick_array.first
+				ora_lock_pick_array.delete(ora_lock_pick_array.first) if needed_pick_id == ora_lock_pick_array.first
+				glaes_lock_pick_array.delete(glaes_lock_pick_array.first) if needed_pick_id == glaes_lock_pick_array.first
+				laje_lock_pick_array.delete(laje_lock_pick_array.first) if needed_pick_id == laje_lock_pick_array.first
+				vultite_lock_pick_array.delete(vultite_lock_pick_array.first) if needed_pick_id == vultite_lock_pick_array.first
+				rolaren_lock_pick_array.delete(rolaren_lock_pick_array.first) if needed_pick_id == rolaren_lock_pick_array.first
+				veniom_lock_pick_array.delete(veniom_lock_pick_array.first) if needed_pick_id == veniom_lock_pick_array.first
+				invar_lock_pick_array.delete(invar_lock_pick_array.first) if needed_pick_id == invar_lock_pick_array.first
+				alum_lock_pick_array.delete(alum_lock_pick_array.first) if needed_pick_id == alum_lock_pick_array.first
+				golvern_lock_pick_array.delete(golvern_lock_pick_array.first) if needed_pick_id == golvern_lock_pick_array.first
+				kelyn_lock_pick_array.delete(kelyn_lock_pick_array.first) if needed_pick_id == kelyn_lock_pick_array.first
+				vaalin_lock_pick_array.delete(vaalin_lock_pick_array.first) if needed_pick_id == vaalin_lock_pick_array.first
 				next_task = "broken lockpick stow"
 				break
 			elsif line =~ /(You must be holding a lockpick to perform that trick.|You didn't mention what you want to pick the lock with.)/i
@@ -3224,7 +3612,7 @@ pick3 = proc{
 		echo "Got a read on this box, going to change to best suited lockpick."
 		measure.call
 	elsif next_task == "broken lockpick stow"
-		if gnomish_bracers
+		if gnomish_bracers && override_bracers != "override"
 			nextpick.call
 		else
 			broken_lockpick_stow.call
@@ -3263,74 +3651,77 @@ nextpick = proc{
 	before_recommended_pick = recommended_pick
 	if recommended_pick == "copper"
 		needed_pick = UserVars.tpick["steel"]
-		needed_pick_id = $steel_lockpick_id
+		needed_pick_id = steel_lock_pick_array.first
 		recommended_pick = "steel"
 	elsif recommended_pick == "steel"
 		needed_pick = UserVars.tpick["gold"]
-		needed_pick_id = $gold_lockpick_id
+		needed_pick_id = gold_lock_pick_array.first
 		recommended_pick = "gold"
 	elsif recommended_pick == "gold"
 		needed_pick = UserVars.tpick["silver"]
-		needed_pick_id = $silver_lockpick_id
+		needed_pick_id = silver_lock_pick_array.first
 		recommended_pick = "silver"
 	elsif recommended_pick == "silver"
 		needed_pick = UserVars.tpick["mithril"]
-		needed_pick_id = $mithril_lockpick_id
+		needed_pick_id = mithril_lock_pick_array.first
 		recommended_pick = "mithril"
 	elsif recommended_pick == "mithril"
 		needed_pick = UserVars.tpick["ora"]
-		needed_pick_id = $ora_lockpick_id
+		needed_pick_id = ora_lock_pick_array.first
 		recommended_pick = "ora"
 	elsif recommended_pick == "ora"
 		needed_pick = UserVars.tpick["glaes"]
-		needed_pick_id = $glaes_lockpick_id
+		needed_pick_id = glaes_lock_pick_array.first
 		recommended_pick = "glaes"
 	elsif recommended_pick == "glaes"
 		needed_pick = UserVars.tpick["laje"]
-		needed_pick_id = $laje_lockpick_id
+		needed_pick_id = laje_lock_pick_array.first
 		recommended_pick = "laje"
 	elsif recommended_pick == "laje"
 		needed_pick = UserVars.tpick["vultite"]
-		needed_pick_id = $vultite_lockpick_id
+		needed_pick_id = vultite_lock_pick_array.first
 		recommended_pick = "vultite"
 	elsif recommended_pick == "vultite"
 		needed_pick = UserVars.tpick["rolaren"]
-		needed_pick_id = $rolaren_lockpick_id
+		needed_pick_id = rolaren_lock_pick_array.first
 		recommended_pick = "rolaren"
 	elsif recommended_pick == "rolaren"
 		needed_pick = UserVars.tpick["veniom"]
-		needed_pick_id = $veniom_lockpick_id
+		needed_pick_id = veniom_lock_pick_array.first
 		recommended_pick = "veniom"
 	elsif recommended_pick == "veniom"
 		needed_pick = UserVars.tpick["invar"]
-		needed_pick_id = $invar_lockpick_id
+		needed_pick_id = invar_lock_pick_array.first
 		recommended_pick = "invar"
 	elsif recommended_pick == "invar"
 		needed_pick = UserVars.tpick["alum"]
-		needed_pick_id = $alum_lockpick_id
+		needed_pick_id = alum_lock_pick_array.first
 		recommended_pick = "alum"
 	elsif recommended_pick == "alum"
 		needed_pick = UserVars.tpick["golvern"]
-		needed_pick_id = $golvern_lockpick_id
+		needed_pick_id = golvern_lock_pick_array.first
 		recommended_pick = "golvern"
 	elsif recommended_pick == "golvern"
 		needed_pick = UserVars.tpick["kelyn"]
-		needed_pick_id = $kelyn_lockpick_id
+		needed_pick_id = kelyn_lock_pick_array.first
 		recommended_pick = "kelyn"
 	elsif recommended_pick == "kelyn"
 		need_403 = "yes" unless UserVars.tpick["always_use_403"] == "never"
 		needed_pick = UserVars.tpick["vaalin"]
-		needed_pick_id = $vaalin_lockpick_id
+		needed_pick_id = vaalin_lock_pick_array.first
 		recommended_pick = "vaalin"
 	elsif recommended_pick == "vaalin" && roll_amount != 100
 		need_403 = "yes" unless UserVars.tpick["always_use_403"] == "never"
 		needed_pick = UserVars.tpick["vaalin"]
-		needed_pick_id = $vaalin_lockpick_id
+		needed_pick_id = vaalin_lock_pick_array.first
 		recommended_pick = "vaalin"
 	elsif recommended_pick == "vaalin" && roll_amount == 100
 		needed_pick = "wedge"
 	end
-	if before_needed_pick == needed_pick && recommended_pick != "vaalin"
+	if needed_pick_id.nil?
+		echo "All of your #{recommended_pick} lockpicks seem to be broken, trying a higher tier lockpick."
+		nextpick.call
+	elsif before_needed_pick == needed_pick && recommended_pick != "vaalin"
 		nextpick.call
 	else
 		nextpick2.call
@@ -3725,7 +4116,11 @@ stow_right = proc{
 		elsif GameObj.right_hand.id == $scale_trap_weapon_id
 			until checkright.nil?
 				waitrt?
-				fput "put right in ##{scale_weapon_container.id}"
+				if scale_weapon_container.nil?
+					fput "put ##{$scale_trap_weapon_id} in my #{UserVars.tpick["scale_weapon_container"]}"
+				else
+					fput "put ##{$scale_trap_weapon_id} in ##{scale_weapon_container.id}"
+				end
 				sleep 0.2
 			end
 		else
@@ -3761,7 +4156,11 @@ stow_left = proc{
 		elsif GameObj.left_hand.id == $scale_trap_weapon_id
 			until checkleft.nil?
 				waitrt?
-				fput "put left in ##{scale_weapon_container.id}"
+				if scale_weapon_container.nil?
+					fput "put ##{$scale_trap_weapon_id} in my #{UserVars.tpick["scale_weapon_container"]}"
+				else
+					fput "put ##{$scale_trap_weapon_id} in ##{scale_weapon_container.id}"
+				end
 				sleep 0.2
 			end
 		else
@@ -3837,7 +4236,134 @@ get_wire_order_numbers = proc{
 	move 'out' if checkpaths 'out'
 }
 
-if (CharSettings['setup_has_been_run'].nil? || CharSettings['setup_has_been_run_again'].nil?|| UserVars.tpick.nil?) and (script.vars[1] != 'setup')
+all_variables_to_check.each{|i|
+	if i == "percent" || i =~ /\%/
+		tip_is_a_percent = true
+		break
+	end
+}
+
+all_variables_to_check.each{|i|
+	if i =~ /\d+/
+		tip_being_offered = i.to_i
+	end
+}
+
+all_variables_to_check.each{|i|
+	if i == "drop"
+		current_room = Room.current.id
+		if worker.nil?
+			echo "The \"drop\" command only works at locksmith pools."
+			exit
+		end
+		if tip_being_offered.nil?
+			echo "You need to specify how much you are tipping and if you want it to be a percent."
+			echo "For example do \";tpick drop 100\" to tip 100 silvers per box, do \";tpick drop 10 percent\" or \";tpick drop 10%\" if you want to tip 10% per box"
+			exit
+		end
+		if tip_is_a_percent && tip_being_offered > 100
+			echo "Wise guy, huh? You can't tip more than 100%!"
+			exit
+		end
+		fput "stow right" if checkright
+		fput "stow left" if checkleft
+		$tpick_boxes_checked = nil
+		check_for_command = "inv full"
+		check_for_boxes.call
+		wait_until { $tpick_boxes_checked }
+		total_number_of_boxes = $tpick_list_of_box_ids.length
+		count_boxes_in_disk.call
+		echo "Total number of boxes: #{total_number_of_boxes}"
+		if total_number_of_boxes == 0
+			echo "You don't have any boxes!"
+			exit
+		end
+		if tip_is_a_percent
+			echo "You are tipping #{tip_being_offered}% for each box."
+			sleep 1
+			start_script 'go2', [ 'bank', '--disable-confirm' ]
+			wait_while{ running?('go2') }
+			fput "depo all"
+			fput "withdraw #{2000 * total_number_of_boxes} silvers"
+			start_script 'go2', [ current_room ]
+			wait_while{ running?('go2') }
+			$tpick_list_of_box_ids.each{ |box|
+				fput "get ##{box}"
+				fput "give #{worker} #{tip_being_offered} percent"
+				fput "give #{worker} #{tip_being_offered} percent"
+			}
+		else
+			echo "You are tipping #{tip_being_offered} silvers for each box for a total tip needed of #{tip_being_offered * total_number_of_boxes}"
+			sleep 1
+			start_script 'go2', [ 'bank', '--disable-confirm' ]
+			wait_while{ running?('go2') }
+			fput "depo all"
+			fput "withdraw #{tip_being_offered * total_number_of_boxes} silvers"
+			start_script 'go2', [ current_room ]
+			wait_while{ running?('go2') }
+			$tpick_list_of_box_ids.each{ |box|
+				fput "get ##{box}"
+				fput "give #{worker} #{tip_being_offered}"
+				fput "give #{worker} #{tip_being_offered}"
+			}
+		end
+		exit
+	end
+}
+
+all_variables_to_check.each{|i|
+	if i == "return" || i == "pickup"
+		if worker.nil?
+			echo "This command only works at locksmith pools."
+			exit
+		end
+		fput "stow right" if checkright
+		fput "stow left" if checkleft
+		loop{
+			fput "ask #{worker} about return"
+			while line = get
+				if line =~ /We don\'t have any boxes ready for you/
+					exit
+				elsif line =~ /here\'s your .* back/
+					lootbox = GameObj.right_hand
+					fput "open ##{lootbox.id}"
+					lootbox.contents.each{|item|
+						waitrt?
+						if (item.name !~ /urglaes fang/) && (item.name !~ /doomstone/)
+							fput "get #{item} from ##{lootbox.id}"
+							if item.name =~ /coins/
+								while line = get
+									if line =~ /You gather the remaining (\d+) coins?/
+										if $1.to_i < 625
+											sleep 0.1
+										else
+											while line = get
+												if line =~ /Roundtime\: (\d+) sec/
+													sleep ($1.to_i + 1)
+													break
+												end
+											end									
+										end
+										waitrt?
+										break
+									end
+								end
+							else
+								fput "stow left"
+							end
+						end
+					}
+					fput "stow right" if checkright
+					fput "stow left" if checkleft
+					break
+				end
+			end
+		}
+	exit
+	end
+}
+
+if (CharSettings['setup_has_been_run'].nil? || CharSettings['setup_has_been_run_again'].nil?|| UserVars.tpick.nil?) && (script.vars[1] != 'setup')
 	echo "Setup is required, type ;tpick setup and fill in all settings."
 	echo "If you are upgrading to a new version of ;tpick keep in mind all lockpick settings AND container names AND scale trap weapon now require the full name of each lockpick, not including the words 'a' and 'an'."	
 	exit
@@ -3862,6 +4388,7 @@ if (UserVars.tpick["gnomish_bracer"] != "nil") && (UserVars.tpick["gnomish_brace
 	bracers_temp = UserVars.tpick["gnomish_bracer"].split(",")
 	bracers_name = bracers_temp[0]
 	bracers_tier = bracers_temp[1]
+	override_bracers = bracers_temp[2]
 	gnomish_bracers = bracers_name
 end
 
@@ -3882,24 +4409,40 @@ end
 $tpick_boxes_checked = nil
 check_for_lockpicks_etc.call
 wait_until { $tpick_boxes_checked }
+$copper_lockpick_id = copper_lock_pick_array.first
+$steel_lockpick_id = steel_lock_pick_array.first
+$gold_lockpick_id = gold_lock_pick_array.first
+$silver_lockpick_id = silver_lock_pick_array.first
+$mithril_lockpick_id = mithril_lock_pick_array.first
+$ora_lockpick_id = ora_lock_pick_array.first
+$glaes_lockpick_id = glaes_lock_pick_array.first
+$laje_lockpick_id = laje_lock_pick_array.first
+$vultite_lockpick_id = vultite_lock_pick_array.first
+$rolaren_lockpick_id = rolaren_lock_pick_array.first
+$veniom_lockpick_id = veniom_lock_pick_array.first
+$invar_lockpick_id = invar_lock_pick_array.first
+$alum_lockpick_id = alum_lock_pick_array.first
+$golvern_lockpick_id = golvern_lock_pick_array.first
+$kelyn_lockpick_id = kelyn_lock_pick_array.first
+$vaalin_lockpick_id = vaalin_lock_pick_array.first
 
-(echo "Couldn't find your copper lockpick";sleep 2) unless $copper_lockpick_id
-(echo "Couldn't find your steel lockpick";sleep 2) unless $steel_lockpick_id
-(echo "Couldn't find your gold lockpick";sleep 2) unless $gold_lockpick_id
-(echo "Couldn't find your silver lockpick";sleep 2) unless $silver_lockpick_id
-(echo "Couldn't find your mithril lockpick";sleep 2) unless $mithril_lockpick_id
-(echo "Couldn't find your ora lockpick";sleep 2) unless $ora_lockpick_id
-(echo "Couldn't find your glaes lockpick";sleep 2) unless $glaes_lockpick_id
-(echo "Couldn't find your laje lockpick";sleep 2) unless $laje_lockpick_id
-(echo "Couldn't find your vultite lockpick";sleep 2) unless $vultite_lockpick_id
-(echo "Couldn't find your rolaren lockpick";sleep 2) unless $rolaren_lockpick_id
-(echo "Couldn't find your veniom lockpick";sleep 2) unless $veniom_lockpick_id
-(echo "Couldn't find your invar lockpick";sleep 2) unless $invar_lockpick_id
-(echo "Couldn't find your alum lockpick";sleep 2) unless $alum_lockpick_id
-(echo "Couldn't find your golvern lockpick";sleep 2) unless $golvern_lockpick_id
-(echo "Couldn't find your kelyn lockpick";sleep 2) unless $kelyn_lockpick_id
-(echo "Couldn't find your vaalin lockpick";sleep 2) unless $vaalin_lockpick_id
-(echo "Couldn't find your scale trap weapon";sleep 2) unless $scale_trap_weapon_id
+(echo "Couldn't find your copper lockpick";sleep 2) if $copper_lockpick_id.nil? && UserVars.tpick["copper"] != "nil" && UserVars.tpick["copper"].length > 1
+(echo "Couldn't find your steel lockpick";sleep 2) if $steel_lockpick_id.nil? && UserVars.tpick["steel"] != "nil" && UserVars.tpick["steel"].length > 1
+(echo "Couldn't find your gold lockpick";sleep 2) if $gold_lockpick_id.nil? && UserVars.tpick["gold"] != "nil" && UserVars.tpick["gold"].length > 1
+(echo "Couldn't find your silver lockpick";sleep 2) if $silver_lockpick_id.nil? && UserVars.tpick["silver"] != "nil" && UserVars.tpick["silver"].length > 1
+(echo "Couldn't find your mithril lockpick";sleep 2) if $mithril_lockpick_id.nil? && UserVars.tpick["mithril"] != "nil" && UserVars.tpick["mithril"].length > 1
+(echo "Couldn't find your ora lockpick";sleep 2) if $ora_lockpick_id.nil? && UserVars.tpick["ora"] != "nil" && UserVars.tpick["ora"].length > 1
+(echo "Couldn't find your glaes lockpick";sleep 2) if $glaes_lockpick_id.nil? && UserVars.tpick["glaes"] != "nil" && UserVars.tpick["glaes"].length > 1
+(echo "Couldn't find your laje lockpick";sleep 2) if $laje_lockpick_id.nil? && UserVars.tpick["laje"] != "nil" && UserVars.tpick["laje"].length > 1
+(echo "Couldn't find your vultite lockpick";sleep 2) if $vultite_lockpick_id.nil? && UserVars.tpick["vultite"] != "nil" && UserVars.tpick["vultite"].length > 1
+(echo "Couldn't find your rolaren lockpick";sleep 2) if $rolaren_lockpick_id.nil? && UserVars.tpick["rolaren"] != "nil" && UserVars.tpick["rolaren"].length > 1
+(echo "Couldn't find your veniom lockpick";sleep 2) if $veniom_lockpick_id.nil? && UserVars.tpick["veniom"] != "nil" && UserVars.tpick["veniom"].length > 1
+(echo "Couldn't find your invar lockpick";sleep 2) if $invar_lockpick_id.nil? && UserVars.tpick["invar"] != "nil" && UserVars.tpick["invar"].length > 1
+(echo "Couldn't find your alum lockpick";sleep 2) if $alum_lockpick_id.nil? && UserVars.tpick["alum"] != "nil" && UserVars.tpick["alum"].length > 1
+(echo "Couldn't find your golvern lockpick";sleep 2) if $golvern_lockpick_id.nil? && UserVars.tpick["golvern"] != "nil" && UserVars.tpick["golvern"].length > 1
+(echo "Couldn't find your kelyn lockpick";sleep 2) if $kelyn_lockpick_id.nil? && UserVars.tpick["kelyn"] != "nil" && UserVars.tpick["kelyn"].length > 1
+(echo "Couldn't find your vaalin lockpick";sleep 2) if $vaalin_lockpick_id.nil? && UserVars.tpick["vaalin"] != "nil" && UserVars.tpick["vaalin"].length > 1
+(echo "Couldn't find your scale trap weapon";sleep 2) if $scale_trap_weapon_id.nil? && UserVars.tpick["scale_trap_weapon"] != "nil" && UserVars.tpick["scale_trap_weapon"].length > 1
 
 if script.vars[1] =~ /buy/
 	check_locksmiths_container.call
@@ -3922,127 +4465,181 @@ if script.vars[1] =~ /buy/
 	exit
 end
 
+repair_stuff_and_stuff = proc{
+	result = dothistimeout "look ##{current_pick_to_check}", 1, /The.*appears to be broken\.|You see nothing unusual\.|I could not find what you were referring to\.|appears to be somewhat damaged/
+	if result =~ /The.*appears to be broken\./
+		if $tpick_vaalin_wire == nil
+			get_wire_order_numbers.call
+		end
+		if number == 1
+			lockpick_type = "vaalin"
+			current_wire = $tpick_vaalin_wire
+			current_wire_cost = $tpick_vaalin_wire_cost
+		elsif number == 2
+			lockpick_type = "kelyn"
+			current_wire = $tpick_kelyn_wire
+			current_wire_cost = $tpick_kelyn_wire_cost
+		elsif number == 3
+			lockpick_type = "golvern"
+			current_wire = $tpick_golvern_wire
+			current_wire_cost = $tpick_golvern_wire_cost
+		elsif number == 4
+			lockpick_type = "alum"
+			current_wire = $tpick_alum_wire
+			current_wire_cost = $tpick_alum_wire_cost
+		elsif number == 5
+			lockpick_type = "invar"
+			current_wire = $tpick_invar_wire
+			current_wire_cost = $tpick_invar_wire_cost
+		elsif number == 6
+			lockpick_type = "veniom"
+			current_wire = $tpick_veniom_wire
+			current_wire_cost = $tpick_veniom_wire_cost
+		elsif number == 7
+			lockpick_type = "rolaren"
+			current_wire = $tpick_rolaren_wire
+			current_wire_cost = $tpick_rolaren_wire_cost
+		elsif number == 8
+			lockpick_type = "vultite"
+			current_wire = $tpick_vultite_wire
+			current_wire_cost = $tpick_vultite_wire_cost
+		elsif number == 9
+			lockpick_type = "laje"
+			current_wire = $tpick_laje_wire
+			current_wire_cost = $tpick_laje_wire_cost
+		elsif number == 10
+			lockpick_type = "ora"
+			current_wire = $tpick_ora_wire 
+			current_wire_cost = $tpick_ora_wire_cost
+		elsif number == 11
+			lockpick_type = "mithril"
+			current_wire = $tpick_mithril_wire 
+			current_wire_cost = $tpick_mithril_wire_cost
+		elsif number == 12
+			lockpick_type = "silver"
+			current_wire = $tpick_silver_wire
+			current_wire_cost = $tpick_silver_wire_cost
+		elsif number == 13
+			lockpick_type = "gold"
+			current_wire = $tpick_gold_wire
+			current_wire_cost = $tpick_gold_wire_cost
+		elsif number == 14
+			lockpick_type = "steel"
+			current_wire = $tpick_steel_wire
+			current_wire_cost = $tpick_steel_wire_cost
+		elsif number > 14
+			lockpick_type = "copper"
+			current_wire = $tpick_copper_wire
+			current_wire_cost = $tpick_copper_wire_cost
+		end
+		fput "get ##{current_pick_to_check}"
+		move 'out' if checkpaths 'out'
+		start_script 'go2', [ 'bank', '--disable-confirm' ]
+		wait_while{ running?('go2') }
+		multifput "depo all", "withdraw #{current_wire_cost} silvers"
+		target_room = Room.current.find_nearest(toolbenches_room_number)
+		start_script 'go2', [ target_room.to_s ]
+		wait_while{ running?('go2') }
+		move 'go toolbench'
+		waitrt?
+		fput "order #{current_wire}"
+		fput "buy"
+		waitrt?
+		result = dothistimeout "lmas repair ##{current_pick_to_check}", 2, /cooling rapidly to form a tight bond|but the broken tip refuses to work free/
+		if result =~ /cooling rapidly to form a tight bond/
+			waitrt?
+			fput "put ##{current_pick_to_check} in ##{lockpick_container.id}"
+		elsif result =~ /but the broken tip refuses to work free/
+			echo "This lockpick cannot be repaired."
+			fput "stow ##{current_pick_to_check}"
+		elsif result.nil?
+			echo "Didn't recognize any game lines."
+			exit
+		end
+	elsif result =~ /You see nothing unusual\.|I could not find what you were referring to\.|appears to be somewhat damaged/
+		nil
+	end
+}
+
 if script.vars[1] =~ /repair/ && Char.prof =~ /Rogue/
 	stow_right.call
 	stow_left.call
-	lockpicks_to_check = [
-		"#{$copper_lockpick_id}",
-		"#{$steel_lockpick_id}",
-		"#{$gold_lockpick_id}",
-		"#{$silver_lockpick_id}",
-		"#{$mithril_lockpick_id}",
-		"#{$ora_lockpick_id}",
-		"#{$laje_lockpick_id}",
-		"#{$vultite_lockpick_id}",
-		"#{$rolaren_lockpick_id}",
-		"#{$veniom_lockpick_id}",
-		"#{$invar_lockpick_id}",
-		"#{$alum_lockpick_id}",
-		"#{$golvern_lockpick_id}",
-		"#{$kelyn_lockpick_id}",
-		"#{$vaalin_lockpick_id}"
-	]
 	number = 1
-	if $tpick_vaalin_wire == nil
-		get_wire_order_numbers.call
-	end
-	lockpicks_to_check.each { |i|
-		result = dothistimeout "look ##{i}", 1, /The.*appears to be broken\.|You see nothing unusual\.|I could not find what you were referring to\./
-		if result =~ /The.*appears to be broken\./
-			if number == 1
-				lockpick_type = "copper"
-				current_wire = $tpick_copper_wire
-				current_wire_cost = $tpick_copper_wire_cost
-			elsif number == 2
-				lockpick_type = "steel"
-				current_wire = $tpick_steel_wire
-				current_wire_cost = $tpick_steel_wire_cost
-			elsif number == 3
-				lockpick_type = "gold"
-				current_wire = $tpick_gold_wire
-				current_wire_cost = $tpick_gold_wire_cost
-			elsif number == 4
-				lockpick_type = "silver"
-				current_wire = $tpick_silver_wire
-				current_wire_cost = $tpick_silver_wire_cost
-			elsif number == 5
-				lockpick_type = "mithril"
-				current_wire = $tpick_mithril_wire 
-				current_wire_cost = $tpick_mithril_wire_cost
-			elsif number == 6
-				lockpick_type = "ora"
-				current_wire = $tpick_ora_wire 
-				current_wire_cost = $tpick_ora_wire_cost 
-			elsif number == 7
-				lockpick_type = "laje"
-				current_wire = $tpick_laje_wire
-				current_wire_cost = $tpick_laje_wire_cost
-			elsif number == 8
-				lockpick_type = "vultite"
-				current_wire = $tpick_vultite_wire
-				current_wire_cost = $tpick_vultite_wire_cost
-			elsif number == 9
-				lockpick_type = "rolaren"
-				current_wire = $tpick_rolaren_wire
-				current_wire_cost = $tpick_rolaren_wire_cost
-			elsif number == 10
-				lockpick_type = "veniom"
-				current_wire = $tpick_veniom_wire
-				current_wire_cost = $tpick_veniom_wire_cost
-			elsif number == 11
-				lockpick_type = "invar"
-				current_wire = $tpick_invar_wire
-				current_wire_cost = $tpick_invar_wire_cost
-			elsif number == 12
-				lockpick_type = "alum"
-				current_wire = $tpick_alum_wire
-				current_wire_cost = $tpick_alum_wire_cost
-			elsif number == 13
-				lockpick_type = "golvern"
-				current_wire = $tpick_golvern_wire
-				current_wire_cost = $tpick_golvern_wire_cost
-			elsif number == 14
-				lockpick_type = "kelyn"
-				current_wire = $tpick_kelyn_wire
-				current_wire_cost = $tpick_kelyn_wire_cost
-			elsif number == 15
-				lockpick_type = "vaalin"
-				current_wire = $tpick_vaalin_wire
-				current_wire_cost = $tpick_vaalin_wire_cost
-			end
-			current_pick_to_check = i
-			fput "get ##{current_pick_to_check}"
-			move 'out' if checkpaths 'out'
-			start_script 'go2', [ 'bank', '--disable-confirm' ]
-			wait_while{ running?('go2') }
-			multifput "depo all", "withdraw #{current_wire_cost} silvers"
-			target_room = Room.current.find_nearest(toolbenches_room_number)
-			start_script 'go2', [ target_room.to_s ]
-			wait_while{ running?('go2') }
-			move 'go toolbench'
-			waitrt?
-			fput "order #{current_wire}"
-			fput "buy"
-			waitrt?
-			result = dothistimeout "lmas repair ##{current_pick_to_check}", 2, /cooling rapidly to form a tight bond|but the broken tip refuses to work free/
-			if result =~ /cooling rapidly to form a tight bond/
-				waitrt?
-				fput "put ##{current_pick_to_check} in ##{lockpick_container.id}"
-			elsif result =~ /but the broken tip refuses to work free/
-				echo "This lockpick cannot be repaired."
-				fput "stow ##{current_pick_to_check}"
-			elsif result.nil?
-				echo "Didn't recognize any game lines."
-				exit
-			end
-		elsif result =~ /You see nothing unusual\.|I could not find what you were referring to\./
-			nil
-		elsif result.nil?
-			nil
-		end
-		number += 1
+	vaalin_lock_pick_array.each { |i|
+		current_pick_to_check = i
+		repair_stuff_and_stuff.call
 	}
-	move 'out' if checkpaths 'out'
+	number += 1
+	kelyn_lock_pick_array.each { |i|
+		current_pick_to_check = i
+		repair_stuff_and_stuff.call
+	}
+	number += 1
+	golvern_lock_pick_array.each { |i|
+		current_pick_to_check = i
+		repair_stuff_and_stuff.call
+	}
+	number += 1
+	alum_lock_pick_array.each { |i|
+		current_pick_to_check = i
+		repair_stuff_and_stuff.call
+	}
+	number += 1
+	invar_lock_pick_array.each { |i|
+		current_pick_to_check = i
+		repair_stuff_and_stuff.call
+	}
+	number += 1
+	veniom_lock_pick_array.each { |i|
+		current_pick_to_check = i
+		repair_stuff_and_stuff.call
+	}
+	number += 1
+	rolaren_lock_pick_array.each { |i|
+		current_pick_to_check = i
+		repair_stuff_and_stuff.call
+	}
+	number += 1
+	vultite_lock_pick_array.each { |i|
+		current_pick_to_check = i
+		repair_stuff_and_stuff.call
+	}
+	number += 1
+	laje_lock_pick_array.each { |i|
+		current_pick_to_check = i
+		repair_stuff_and_stuff.call
+	}
+	number += 1
+	ora_lock_pick_array.each { |i|
+		current_pick_to_check = i
+		repair_stuff_and_stuff.call
+	}
+	number += 1
+	mithril_lock_pick_array.each { |i|
+		current_pick_to_check = i
+		repair_stuff_and_stuff.call
+	}
+	number += 1
+	silver_lock_pick_array.each { |i|
+		current_pick_to_check = i
+		repair_stuff_and_stuff.call
+	}
+	number += 1
+	gold_lock_pick_array.each { |i|
+		current_pick_to_check = i
+		repair_stuff_and_stuff.call
+	}
+	number += 1
+	steel_lock_pick_array.each { |i|
+		current_pick_to_check = i
+		repair_stuff_and_stuff.call
+	}
+	number += 1
+	copper_lock_pick_array.each { |i|
+		current_pick_to_check = i
+		repair_stuff_and_stuff.call
+	}
+	move 'out' if checkroom =~ /workbench/i
 	exit
 elsif script.vars[1] =~ /repair/ && Char.prof !~ /Rogue/
 	echo "Only rogues can repair lockpicks."
@@ -4067,11 +4664,13 @@ end
 if Char.prof =~ /Rogue/
 	can_use_calipers = true
 	if (UserVars.tpick["trick"] == "spin" or UserVars.tpick["trick"] == "twist" or UserVars.tpick["trick"] == "turn" or UserVars.tpick["trick"] == "twirl" or UserVars.tpick["trick"] == "toss" or UserVars.tpick["trick"] == "bend" or UserVars.tpick["trick"] == "flip")
-		do_trick = "lmas ptrick #{UserVars.tpick["trick"]}"
+		do_trick = "lmas ptrick #{UserVars.tpick["trick"]}"	
 	elsif UserVars.tpick["trick"] == "pick"
 		do_trick = "pick"
+	elsif UserVars.tpick["trick"] == "random"
+		nil
 	else
-		(echo "Wrong value for TRICK in settings. Type ;tpick setup and enter spin, twist, turn, twirl, toss, bend, flip or pick for the TRICK setting.";exit)
+		(echo "Wrong value for TRICK in settings. Type ;tpick setup and enter spin, twist, turn, twirl, toss, bend, flip, pick, or random for the TRICK setting.";exit)
 	end
 else
 	can_use_calipers = nil
@@ -4091,12 +4690,40 @@ if Spell[402].known? && UserVars.tpick["always_use_402"] == "yes"
 	use_spell_402 = true
 end
 
-if Spell[403].known? && UserVars.tpick["always_use_403"] == "yes"
-	use_spell_403 = true
+if Spell[403].known?
+	if UserVars.tpick["always_use_403"] =~ /\,/
+		temp_403_variable = UserVars.tpick["always_use_403"].split(",")
+		if temp_403_variable[0] =~ /\d+/
+			use_403_for_lock_difficulty = temp_403_variable[0].to_i
+		elsif temp_403_variable[1] =~ /\d+/
+			use_403_for_lock_difficulty = temp_403_variable[1].to_i
+		end
+		$tpick_use_403_cancel = "cancel" if temp_403_variable[0] =~ /cancel/i || temp_403_variable[1] =~ /cancel/i
+	else
+		if UserVars.tpick["always_use_403"] =~ /\d+/
+			use_403_for_lock_difficulty = UserVars.tpick["always_use_403"].to_i
+		elsif UserVars.tpick["always_use_403"] == "yes"
+			use_spell_403 = true
+		end
+	end
 end
 
-if Spell[404].known? && UserVars.tpick["always_use_404"] == "yes"
-	use_spell_404 = true
+if Spell[404].known?
+	if UserVars.tpick["always_use_404"] =~ /\,/
+		temp_404_variable = UserVars.tpick["always_use_404"].split(",")
+		if temp_404_variable[0] =~ /\d+/
+			use_404_for_trap_difficulty = temp_404_variable[0].to_i
+		elsif temp_404_variable[1] =~ /\d+/
+			use_404_for_trap_difficulty = temp_404_variable[1].to_i
+		end
+		$tpick_use_404_cancel = "cancel" if temp_404_variable[0] =~ /cancel/i || temp_404_variable[1] =~ /cancel/i
+	else
+		if UserVars.tpick["always_use_404"] =~ /\d+/
+			use_404_for_trap_difficulty = UserVars.tpick["always_use_404"].to_i
+		elsif UserVars.tpick["always_use_404"] == "yes"
+			use_spell_404 = true
+		end
+	end
 end
 
 if Spell[506].known? && UserVars.tpick["always_use_506"] == "yes"
@@ -4125,10 +4752,19 @@ all_variables_to_check.each{|i|
 }
 
 all_variables_to_check.each{|i|
-	if i =~ /\d+/
+	if i =~ /\d+/ && i !~ /level/i
 		minimum_tip_wanted = i.to_i
 	end
 }
+
+all_variables_to_check.each{|i|
+	if i =~ /level(\d+)/i
+		max_critter_level = $1.to_i
+	end
+}
+
+echo "Minimum tip wanted: #{minimum_tip_wanted}" if minimum_tip_wanted > 0
+echo "Max level wanted: #{max_critter_level}" if max_critter_level != 10000
 
 all_variables_to_check.each{|i|
 	if i =~ /plin/
