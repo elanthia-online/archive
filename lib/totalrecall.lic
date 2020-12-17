@@ -151,5 +151,8 @@ elsif script.vars[0] =~ /bonus/
     respond "+ #{((bardranks > level)? (level * 2) + (bardranks - level) : bardranks * 2).to_s.rjust(3)} : Bard Spells (to level *2)+(over level)"
     respond "==========================="
     respond "Total of #{level + (aura) + (influence) + (magicitemuse/2).truncate + (elementalmanacontrol/2).truncate + (mentalmanacontrol/2).truncate + (telepathy) + ((bardranks > level)? (level * 2) + (bardranks - level) : bardranks * 2).truncate}"
+    respond ""
+    respond "Maximum item difficulty floor begins at 515 and ends at 615."
+    respond "Your chance of unlocking the most difficult items in the game is: #{level + (aura) + (influence) + (magicitemuse/2).truncate + (elementalmanacontrol/2).truncate + (mentalmanacontrol/2).truncate + (telepathy) + ((bardranks > level)? (level * 2) + (bardranks - level) : bardranks * 2).truncate - 515}%"
 	exit
 end
