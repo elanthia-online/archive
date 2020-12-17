@@ -13,9 +13,11 @@
      author: Naamit
        name: totalrecall
        tags: totalrecall, recall, loresinging, bard, lkp, unlocking, murderverse, murder, murderverses
-    version: 1.2
+    version: 1.3
 
     changelog:
+        1.3  (2020-12-17)
+            - updated with max difficulty percentage
         1.2  (2020-12-9)
             - Fixed math and regex for commageddon. Also added formula to output
         1.1  (2020-12-05)
@@ -151,5 +153,8 @@ elsif script.vars[0] =~ /bonus/
     respond "+ #{((bardranks > level)? (level * 2) + (bardranks - level) : bardranks * 2).to_s.rjust(3)} : Bard Spells (to level *2)+(over level)"
     respond "==========================="
     respond "Total of #{level + (aura) + (influence) + (magicitemuse/2).truncate + (elementalmanacontrol/2).truncate + (mentalmanacontrol/2).truncate + (telepathy) + ((bardranks > level)? (level * 2) + (bardranks - level) : bardranks * 2).truncate}"
+    respond ""
+    respond "Maximum item difficulty floor begins at 515 and ends at 615."
+    respond "Your chance of unlocking the most difficult items in the game is: #{level + (aura) + (influence) + (magicitemuse/2).truncate + (elementalmanacontrol/2).truncate + (mentalmanacontrol/2).truncate + (telepathy) + ((bardranks > level)? (level * 2) + (bardranks - level) : bardranks * 2).truncate - 515}%"
 	exit
 end
