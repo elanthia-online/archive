@@ -62,6 +62,36 @@ bank_list.push 10325
 
 CharSettings['minimum-deeds'] ||= 2
 
+start_rooms = [ 285 ]
+
+wander_history = Array.new
+
+find_priestess_2 = proc {
+	until checknpcs.include?('priestess') or dead?
+		room = Room.current
+		next_room_options = room.wayto.keys.find_all { |k| room.wayto[k] =~ /^(?:north|northeast|east|southeast|south|southwest|west|northwest|out|n|ne|e|se|s|sw|w|nw)$/ }
+		next_room = next_room_options.find_all { |r| not wander_history.include?(r) }
+		if next_room.empty?
+			next_room = wander_history.find { |r| next_room_options.include?(r) }
+		else
+			next_room = next_room[rand(next_room.length)]
+		end
+		if next_room
+			wander_history.delete(next_room)
+			wander_history.push(next_room)
+			way = Room.current.wayto[next_room]
+			if way.class == String 
+				move way
+			elsif way.class == Proc
+				way.call
+			end
+		else
+			echo 'fixme'
+			exit
+		end
+	end
+}
+
 find_priestess = proc {
 	visited_rooms = Array.new
 	until checknpcs.include?('priestess') or dead?
@@ -91,8 +121,8 @@ check_silvers = proc {
 	action = proc { |server_string|
 		if server_string =~ /^\s*Name\:|^\s*Gender\:|^\s*Normal \(Bonus\)|^\s*Strength \(STR\)\:|^\s*Constitution \(CON\)\:|^\s*Dexterity \(DEX\)\:|^\s*Agility \(AGI\)\:|^\s*Discipline \(DIS\)\:|^\s*Aura \(AUR\)\:|^\s*Logic \(LOG\)\:|^\s*Intuition \(INT\)\:|^\s*Wisdom \(WIS\)\:|^\s*Influence \(INF\)\:/
 			nil
-		elsif server_string =~ /^\s*Mana\:\s+\-?[0-9]+\s+Silver\:\s+([0-9]+)/
-			silvers = $1.to_i
+		elsif server_string =~ /^\s*Mana\:\s+\-?[0-9]+\s+Silver\:\s+([0-9,]+)/
+			silvers = $1.gsub(',','').to_i
 			DownstreamHook.remove("#{script.name}_check_silvers")
 			nil
 		else
@@ -162,8 +192,8 @@ remove_sting = proc {
 		end
 		empty_hands
 		until (deaths_sting == 'None') or dead?
-			find_priestess.call
-			result = dothistimeout "give ##{GameObj.npcs.find { |npc| npc.noun == 'priestess' }.id} #{potion_cost} silvers", 5, /^What is it you're trying to give\?$|^You start to hand the priestess [0-9]+ silvers, but she only takes|^You count your coins and realize that you don't have that much money!$|^You hand the priestess/
+			find_priestess_2.call
+			result = dothistimeout "give ##{GameObj.npcs.find { |npc| npc.noun == 'priestess' }.id} #{potion_cost} silvers", 5, /^What is it you're trying to give\?$|^You start to hand the priestess [0-9,]+ silvers, but she only takes|^You count your coins and realize that you don't have that much money!$|^You hand the priestess/
 			if result == "You count your coins and realize that you don't have that much money!"
 				break if out_of_silvers
 				this_room = Room.current
@@ -175,7 +205,7 @@ remove_sting = proc {
 				if check_silvers.call < (potion_cost * 5)
 					out_of_silvers = true
 				end
-			elsif result =~ /^You hand the priestess [0-9]+ silvers\.|^You start to hand the priestess [0-9]+ silvers, but she only takes/
+			elsif result =~ /^You hand the priestess [0-9,]+ silvers\.|^You start to hand the priestess [0-9,]+ silvers, but she only takes/
 				dothistimeout 'drink my flask', 5, /^As you sip|^You take a sip/
 				check_sting.call
 			end
